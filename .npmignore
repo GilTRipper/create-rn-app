@@ -1,10 +1,30 @@
+# Version control
 .git/
 .github/
+
+# IDE
 .idea/
 .vscode/
+
+# Logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Documentation (not needed in npm package)
+*.md
+!README.md
+!template/README.md
+!template/SETUP.md
+
+# Development files
+test-cli.sh
+show-structure.sh
 
 # Keep template
 !template/
-

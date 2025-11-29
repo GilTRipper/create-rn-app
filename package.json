@@ -6,15 +6,29 @@
   "bin": {
     "create-react-native-app": "./bin/cli.js"
   },
+  "scripts": {
+    "test": "echo \"Tests coming soon...\" && exit 0"
+  },
   "keywords": [
     "react-native",
     "cli",
     "template",
     "boilerplate",
-    "starter"
+    "starter",
+    "generator",
+    "scaffold",
+    "react-native-cli"
   ],
-  "author": "",
+  "author": "Gil T Ripper <gilbertrom@icloud.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GilTRipper/create-react-native-app"
+  },
+  "bugs": {
+    "url": "https://github.com/GilTRipper/create-react-native-app/issues"
+  },
+  "homepage": "https://github.com/GilTRipper/create-react-native-app#readme",
   "files": [
     "bin",
     "src",
