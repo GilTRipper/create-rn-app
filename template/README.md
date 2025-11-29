@@ -1,6 +1,6 @@
 # HelloWorld
 
-A React Native application built with create-react-native-app.
+A React Native application built with create-rn-app.
 
 ## Getting Started
 

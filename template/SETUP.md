@@ -1,6 +1,6 @@
 # Setup Instructions
 
-After creating your project with `create-react-native-app`, follow these steps to complete the setup:
+After creating your project with `create-rn-app`, follow these steps to complete the setup:
 
 ## 1. Firebase Setup
 

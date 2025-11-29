@@ -1,6 +1,6 @@
 # Release Guide
 
-Complete guide for publishing `create-react-native-app` to npm via automated GitHub Actions.
+Complete guide for publishing `create-rn-app` to npm via automated GitHub Actions.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ Complete these steps once to enable automated releases.
 4. Configure:
    - **Type**: `Automation` (for CI/CD)
    - **Expiration**: `No expiration` (recommended) or set a date
-   - **Description**: `GitHub Actions - create-react-native-app`
+   - **Description**: `GitHub Actions - create-rn-app`
 5. Click **Generate Token**
 6. **Copy the token** (shown only once!)
 
@@ -66,7 +66,7 @@ For this project, use **Classic Token** with **Automation** type.
 
 #### Via GitHub Web Interface:
 
-1. Open your repository: `https://github.com/GilTRipper/create-react-native-app`
+1. Open your repository: `https://github.com/GilTRipper/create-rn-app`
 2. Go to **Settings** → **Secrets and variables** → **Actions**
 3. Click **"New repository secret"**
 4. Fill in:
@@ -197,7 +197,7 @@ gh release create v1.0.1 \
 
 **Option B: GitHub Web Interface**
 
-1. Go to https://github.com/GilTRipper/create-react-native-app/releases
+1. Go to https://github.com/GilTRipper/create-rn-app/releases
 2. Click **"Draft a new release"**
 3. Click **"Choose a tag"** and select the version (e.g., `v1.0.1`)
 4. Title: `v1.0.1` or `Release 1.0.1`
@@ -215,17 +215,17 @@ gh release create v1.0.1 \
 
 ```bash
 # Check package on npm
-npm view create-react-native-app
+npm view create-rn-app
 
 # Check latest version
-npm view create-react-native-app version
+npm view create-rn-app version
 
 # Test installation
-npx create-react-native-app@latest TestPublished
+npx create-rn-app@latest TestPublished
 
 # Or install globally
-npm install -g create-react-native-app
-create-react-native-app --version
+npm install -g create-rn-app
+create-rn-app --version
 ```
 
 ---
@@ -269,18 +269,18 @@ Test thoroughly before releasing:
 npm link
 
 # Test basic usage
-create-react-native-app TestApp1
+create-rn-app TestApp1
 
 # Test with options
-create-react-native-app TestApp2 --skip-install
-create-react-native-app TestApp3 -p npm --skip-git
+create-rn-app TestApp2 --skip-install
+create-rn-app TestApp3 -p npm --skip-git
 
 # Test interactive mode
-create-react-native-app
+create-rn-app
 
 # Verify help
-create-react-native-app --help
-create-react-native-app --version
+create-rn-app --help
+create-rn-app --version
 
 # Check generated project
 cd TestApp1
@@ -288,7 +288,7 @@ ls -la
 grep -r "HelloWorld" .  # Should find nothing
 
 # Unlink after testing
-npm unlink -g create-react-native-app
+npm unlink -g create-rn-app
 ```
 
 ### ✅ Package Contents
@@ -302,7 +302,7 @@ npm pack
 ls -lh *.tgz
 
 # Inspect contents
-tar -tzf create-react-native-app-*.tgz
+tar -tzf create-rn-app-*.tgz
 ```
 
 Verify:
@@ -367,7 +367,7 @@ Follow [semver](https://semver.org/) for version numbers: **MAJOR.MINOR.PATCH**
 
 **Error**:
 ```
-npm ERR! 403 Forbidden - PUT https://registry.npmjs.org/create-react-native-app
+npm ERR! 403 Forbidden - PUT https://registry.npmjs.org/create-rn-app
 ```
 
 **Solutions**:
@@ -481,10 +481,10 @@ npm publish
 
 ```bash
 # View package info
-npm view create-react-native-app
+npm view create-rn-app
 
 # Test with npx
-npx create-react-native-app@latest TestManualPublish
+npx create-rn-app@latest TestManualPublish
 ```
 
 ---
@@ -495,13 +495,13 @@ npx create-react-native-app@latest TestManualPublish
 # Version management
 npm version                                      # Show current version
 git describe --tags --abbrev=0                  # Show latest tag
-npm view create-react-native-app version        # Check npm version
-npm view create-react-native-app versions       # List all versions
+npm view create-rn-app version        # Check npm version
+npm view create-rn-app versions       # List all versions
 
 # Package inspection
 npm pack --dry-run                              # Preview package contents
 npm pack                                         # Create tarball
-tar -tzf create-react-native-app-*.tgz          # List tarball contents
+tar -tzf create-rn-app-*.tgz          # List tarball contents
 ls -lh *.tgz                                     # Check package size
 
 # Git operations
@@ -511,9 +511,9 @@ git tag -d v1.0.0                               # Delete local tag
 git push origin :refs/tags/v1.0.0               # Delete remote tag
 
 # npm operations
-npm view create-react-native-app                 # View package info
-npm dist-tag ls create-react-native-app         # List dist tags
-npm unpublish create-react-native-app@1.0.0     # Unpublish (within 72h)
+npm view create-rn-app                 # View package info
+npm dist-tag ls create-rn-app         # List dist tags
+npm unpublish create-rn-app@1.0.0     # Unpublish (within 72h)
 ```
 
 ---
@@ -522,8 +522,8 @@ npm unpublish create-react-native-app@1.0.0     # Unpublish (within 72h)
 
 After successful release:
 
-- [ ] Verify package on [npmjs.com](https://www.npmjs.com/package/create-react-native-app)
-- [ ] Test with `npx create-react-native-app@latest`
+- [ ] Verify package on [npmjs.com](https://www.npmjs.com/package/create-rn-app)
+- [ ] Test with `npx create-rn-app@latest`
 - [ ] Update project documentation if needed
 - [ ] Announce release (optional):
   - Twitter/X
@@ -535,8 +535,8 @@ After successful release:
 
 ## Resources
 
-- 📦 [npm Package](https://www.npmjs.com/package/create-react-native-app)
-- 🐙 [GitHub Repository](https://github.com/GilTRipper/create-react-native-app)
+- 📦 [npm Package](https://www.npmjs.com/package/create-rn-app)
+- 🐙 [GitHub Repository](https://github.com/GilTRipper/create-rn-app)
 - 📖 [npm Publishing Docs](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry)
 - 🔄 [GitHub Actions Docs](https://docs.github.com/en/actions)
 - 📏 [Semantic Versioning](https://semver.org/)

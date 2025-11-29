@@ -1,4 +1,4 @@
-# create-react-native-app
+# create-rn-app
 
 <p align="center">
   <h3 align="center">⚡ Create React Native App</h3>
@@ -6,9 +6,9 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/npm/v/create-react-native-app?style=flat-square" alt="npm version" />
-  <img src="https://img.shields.io/npm/dm/create-react-native-app?style=flat-square" alt="npm downloads" />
-  <img src="https://img.shields.io/github/license/GilTRipper/create-react-native-app?style=flat-square" alt="license" />
+  <img src="https://img.shields.io/npm/v/create-rn-app?style=flat-square" alt="npm version" />
+  <img src="https://img.shields.io/npm/dm/create-rn-app?style=flat-square" alt="npm downloads" />
+  <img src="https://img.shields.io/github/license/GilTRipper/create-rn-app?style=flat-square" alt="license" />
 </p>
 
 ---
@@ -22,19 +22,19 @@
 ### Create a new project
 
 ```bash
-npx create-react-native-app MyAwesomeApp
+npx create-rn-app MyAwesomeApp
 ```
 
 ### Interactive mode
 
 ```bash
-npx create-react-native-app
+npx create-rn-app
 ```
 
 ### With options
 
 ```bash
-npx create-react-native-app MyApp --package-manager pnpm --skip-install
+npx create-rn-app MyApp --package-manager pnpm --skip-install
 ```
 
 ## Options
@@ -262,7 +262,7 @@ MIT © Gil T Ripper
 
 ## Support
 
-If you encounter any issues, please file them in the [issues section](https://github.com/GilTRipper/create-react-native-app/issues) of the repository.
+If you encounter any issues, please file them in the [issues section](https://github.com/GilTRipper/create-rn-app/issues) of the repository.
 
 ---
 

@@ -1,6 +1,6 @@
 # Development Guide
 
-Complete guide for developing and testing the `create-react-native-app` CLI tool.
+Complete guide for developing and testing the `create-rn-app` CLI tool.
 
 ## Table of Contents
 
@@ -25,8 +25,8 @@ Complete guide for developing and testing the `create-react-native-app` CLI tool
 
 ```bash
 # Clone the repository
-git clone https://github.com/GilTRipper/create-react-native-app.git
-cd create-react-native-app
+git clone https://github.com/GilTRipper/create-rn-app.git
+cd create-rn-app
 
 # Install dependencies
 npm install
@@ -35,12 +35,12 @@ npm install
 npm link
 ```
 
-After linking, the `create-react-native-app` command will be available globally on your machine.
+After linking, the `create-rn-app` command will be available globally on your machine.
 
 ## Project Structure
 
 ```
-create-react-native-app/
+create-rn-app/
 ├── .github/
 │   └── workflows/           # GitHub Actions
 │       ├── publish.yml      # Auto-publish to npm
@@ -102,19 +102,19 @@ create-react-native-app/
 
 ```bash
 # After making changes, test the CLI:
-create-react-native-app TestApp
+create-rn-app TestApp
 
 # Test with different options:
-create-react-native-app TestPnpm -p pnpm --skip-install
-create-react-native-app TestNpm -p npm --skip-install
-create-react-native-app TestYarn -p yarn --skip-git
+create-rn-app TestPnpm -p pnpm --skip-install
+create-rn-app TestNpm -p npm --skip-install
+create-rn-app TestYarn -p yarn --skip-git
 
 # Test interactive mode:
-create-react-native-app
+create-rn-app
 
 # Test help:
-create-react-native-app --help
-create-react-native-app --version
+create-rn-app --help
+create-rn-app --version
 ```
 
 ### Unlinking
@@ -122,7 +122,7 @@ create-react-native-app --version
 When done testing:
 
 ```bash
-npm unlink -g create-react-native-app
+npm unlink -g create-rn-app
 ```
 
 To relink after changes:
@@ -151,13 +151,13 @@ node --inspect-brk bin/cli.js TestApp
 
 Test the CLI with various configurations:
 
-- [ ] `create-react-native-app TestApp` (interactive mode)
-- [ ] `create-react-native-app TestNpm -p npm`
-- [ ] `create-react-native-app TestYarn -p yarn`
-- [ ] `create-react-native-app TestPnpm -p pnpm`
-- [ ] `create-react-native-app TestSkip --skip-install`
-- [ ] `create-react-native-app TestGit --skip-git`
-- [ ] `create-react-native-app TestBoth --skip-install --skip-git`
+- [ ] `create-rn-app TestApp` (interactive mode)
+- [ ] `create-rn-app TestNpm -p npm`
+- [ ] `create-rn-app TestYarn -p yarn`
+- [ ] `create-rn-app TestPnpm -p pnpm`
+- [ ] `create-rn-app TestSkip --skip-install`
+- [ ] `create-rn-app TestGit --skip-git`
+- [ ] `create-rn-app TestBoth --skip-install --skip-git`
 - [ ] Test with special characters in project name
 - [ ] Test with existing directory
 - [ ] Test cancellation (Ctrl+C)
@@ -246,7 +246,7 @@ To update the template:
    ```
 3. **Test** by creating a new project:
    ```bash
-   create-react-native-app TestTemplateUpdate
+   create-rn-app TestTemplateUpdate
    ```
 4. **Verify** all placeholders are replaced correctly:
    ```bash
@@ -419,7 +419,7 @@ echo 'export PATH="$PATH:$(npm bin -g)"' >> ~/.zshrc
 **Solutions**:
 ```bash
 # Unlink and relink
-npm unlink -g create-react-native-app
+npm unlink -g create-rn-app
 npm link
 
 # Or restart terminal
@@ -464,7 +464,7 @@ npm pack --dry-run
 npm pack
 
 # Inspect tarball contents
-tar -tzf create-react-native-app-1.0.0.tgz
+tar -tzf create-rn-app-1.0.0.tgz
 
 # Check package size
 ls -lh *.tgz
@@ -496,7 +496,7 @@ Once development is complete:
 
 1. Update [CHANGELOG.md](./CHANGELOG.md)
 2. Follow [RELEASE.md](./RELEASE.md) for publishing
-3. Test published package with `npx create-react-native-app@latest`
+3. Test published package with `npx create-rn-app@latest`
 
 ---
 

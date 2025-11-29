@@ -1,10 +1,10 @@
 {
-  "name": "create-react-native-app",
+  "name": "create-rn-app",
   "version": "1.0.0",
   "description": "CLI tool to create a new React Native app with pre-configured setup",
   "main": "src/index.js",
   "bin": {
-    "create-react-native-app": "./bin/cli.js"
+    "create-rn-app": "./bin/cli.js"
   },
   "scripts": {
     "test": "echo \"Tests coming soon...\" && exit 0"
@@ -23,12 +23,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/GilTRipper/create-react-native-app"
+    "url": "https://github.com/GilTRipper/create-rn-app"
   },
   "bugs": {
-    "url": "https://github.com/GilTRipper/create-react-native-app/issues"
+    "url": "https://github.com/GilTRipper/create-rn-app/issues"
   },
-  "homepage": "https://github.com/GilTRipper/create-react-native-app#readme",
+  "homepage": "https://github.com/GilTRipper/create-rn-app#readme",
   "files": [
     "bin",
     "src",

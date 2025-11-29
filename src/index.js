@@ -11,7 +11,7 @@ async function run() {
   console.log(chalk.cyan.bold("\n🚀 Create React Native App\n"));
 
   program
-    .name("create-react-native-app")
+    .name("create-rn-app")
     .description("Create a new React Native app with pre-configured setup")
     .version(packageJson.version, "-v, --version", "display version number")
     .argument("[project-name]", "Name of the project")
