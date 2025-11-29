@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2025-11-27
 
 ### Added
-- Initial release of @giltr/create-rn-app CLI
+- Initial release of @giltripper/create-rn-app CLI
 - React Native 0.82 template with TypeScript
 - Pre-configured Firebase (Analytics, Messaging, Remote Config)
 - Google Maps integration

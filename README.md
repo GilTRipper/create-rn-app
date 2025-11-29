@@ -22,19 +22,19 @@
 ### Create a new project
 
 ```bash
-npx @giltr/create-rn-app MyAwesomeApp
+npx @giltripper/create-rn-app MyAwesomeApp
 ```
 
 ### Interactive mode
 
 ```bash
-npx @giltr/create-rn-app
+npx @giltripper/create-rn-app
 ```
 
 ### With options
 
 ```bash
-npx @giltr/create-rn-app MyApp --package-manager pnpm --skip-install
+npx @giltripper/create-rn-app MyApp --package-manager pnpm --skip-install
 ```
 
 ## Options

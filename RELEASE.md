@@ -215,16 +215,16 @@ gh release create v1.0.1 \
 
 ```bash
 # Check package on npm
-npm view @giltr/create-rn-app
+npm view @giltripper/create-rn-app
 
 # Check latest version
-npm view @giltr/create-rn-app version
+npm view @giltripper/create-rn-app version
 
 # Test installation
-npx @giltr/create-rn-app@latest TestPublished
+npx @giltripper/create-rn-app@latest TestPublished
 
 # Or install globally
-npm install -g @giltr/create-rn-app
+npm install -g @giltripper/create-rn-app
 create-rn-app --version
 ```
 
@@ -481,10 +481,10 @@ npm publish
 
 ```bash
 # View package info
-npm view @giltr/create-rn-app
+npm view @giltripper/create-rn-app
 
 # Test with npx
-npx @giltr/create-rn-app@latest TestManualPublish
+npx @giltripper/create-rn-app@latest TestManualPublish
 ```
 
 ---
@@ -495,8 +495,8 @@ npx @giltr/create-rn-app@latest TestManualPublish
 # Version management
 npm version                                      # Show current version
 git describe --tags --abbrev=0                  # Show latest tag
-npm view @giltr/create-rn-app version        # Check npm version
-npm view @giltr/create-rn-app versions       # List all versions
+npm view @giltripper/create-rn-app version        # Check npm version
+npm view @giltripper/create-rn-app versions       # List all versions
 
 # Package inspection
 npm pack --dry-run                              # Preview package contents
@@ -511,7 +511,7 @@ git tag -d v1.0.0                               # Delete local tag
 git push origin :refs/tags/v1.0.0               # Delete remote tag
 
 # npm operations
-npm view @giltr/create-rn-app                 # View package info
+npm view @giltripper/create-rn-app                 # View package info
 npm dist-tag ls create-rn-app         # List dist tags
 npm unpublish create-rn-app@1.0.0     # Unpublish (within 72h)
 ```
@@ -523,7 +523,7 @@ npm unpublish create-rn-app@1.0.0     # Unpublish (within 72h)
 After successful release:
 
 - [ ] Verify package on [npmjs.com](https://www.npmjs.com/package/create-rn-app)
-- [ ] Test with `npx @giltr/create-rn-app@latest`
+- [ ] Test with `npx @giltripper/create-rn-app@latest`
 - [ ] Update project documentation if needed
 - [ ] Announce release (optional):
   - Twitter/X

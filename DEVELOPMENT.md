@@ -496,7 +496,7 @@ Once development is complete:
 
 1. Update [CHANGELOG.md](./CHANGELOG.md)
 2. Follow [RELEASE.md](./RELEASE.md) for publishing
-3. Test published package with `npx @giltr/create-rn-app@latest`
+3. Test published package with `npx @giltripper/create-rn-app@latest`
 
 ---
 

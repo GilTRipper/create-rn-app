@@ -1,5 +1,5 @@
 {
-  "name": "@giltr/create-rn-app",
+  "name": "@giltripper/create-rn-app",
   "version": "1.0.0",
   "description": "CLI tool to create a new React Native app with pre-configured setup",
   "main": "src/index.js",

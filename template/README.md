@@ -1,6 +1,6 @@
 # HelloWorld
 
-A React Native application built with @giltr/create-rn-app.
+A React Native application built with @giltripper/create-rn-app.
 
 ## Getting Started
 
