@@ -82,7 +82,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "yarn"
+          cache: "npm"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install yarn
+        run: corepack prepare yarn@stable --activate
 
       - name: Install dependencies
         run: npm ci

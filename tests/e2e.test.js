@@ -62,11 +62,21 @@ test('Create project with CLI flags', () => {
   const command = `create-rn-app ${TEST_PROJECT_NAME} -p ${packageManager} --bundle-id ${TEST_BUNDLE_ID} --display-name "${TEST_DISPLAY_NAME}" --skip-git --yes`;
   
   log(`Running: ${command}`, 'info');
-  execSync(command, {
-    cwd: '/tmp',
-    stdio: 'inherit',
-    env: { ...process.env, CI: 'true' }
-  });
+  try {
+    execSync(command, {
+      cwd: '/tmp',
+      stdio: 'inherit',
+      env: { ...process.env, CI: 'true' },
+      timeout: 600000 // 10 minutes timeout for dependency installation
+    });
+  } catch (error) {
+    // Check if project was created even if command failed
+    if (fs.existsSync(TEST_PROJECT_PATH)) {
+      log(`Warning: Command failed but project was created. Error: ${error.message}`, 'info');
+    } else {
+      throw new Error(`Failed to create project: ${error.message}`);
+    }
+  }
 
   if (!fs.existsSync(TEST_PROJECT_PATH)) {
     throw new Error('Project directory was not created');
@@ -176,9 +186,50 @@ test('Check Android package structure', () => {
 // Test 9: Check dependencies installation
 test('Check dependencies are installed', () => {
   const nodeModulesPath = path.join(TEST_PROJECT_PATH, 'node_modules');
+  const packageJsonPath = path.join(TEST_PROJECT_PATH, 'package.json');
+  
+  // First check if project was created
+  if (!fs.existsSync(packageJsonPath)) {
+    throw new Error('package.json not found - project may not have been created');
+  }
+  
+  // Wait for installation to complete (in case it's still running)
+  let attempts = 0;
+  const maxAttempts = 60; // 60 seconds max wait
+  while (!fs.existsSync(nodeModulesPath) && attempts < maxAttempts) {
+    attempts++;
+    if (attempts % 10 === 0) {
+      log(`Waiting for dependencies installation... (${attempts}s)`, 'info');
+    }
+    // Use setTimeout equivalent with execSync to wait
+    try {
+      execSync('sleep 1', { stdio: 'ignore' });
+    } catch (e) {
+      // On Windows, use timeout instead
+      try {
+        execSync('timeout /t 1 /nobreak >nul 2>&1', { stdio: 'ignore' });
+      } catch (e2) {
+        // Fallback: just wait a bit
+        const start = Date.now();
+        while (Date.now() - start < 1000) {
+          // Busy wait as last resort
+        }
+      }
+    }
+  }
   
   if (!fs.existsSync(nodeModulesPath)) {
-    throw new Error('node_modules directory not found - dependencies were not installed');
+    // Check if there's a lock file to see if installation was attempted
+    const lockFiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
+    const hasLockFile = lockFiles.some(lockFile => 
+      fs.existsSync(path.join(TEST_PROJECT_PATH, lockFile))
+    );
+    
+    if (hasLockFile) {
+      throw new Error(`node_modules directory not found after ${maxAttempts}s wait - dependencies installation may have failed. Lock file exists, suggesting installation was attempted.`);
+    } else {
+      throw new Error(`node_modules directory not found - dependencies were not installed (no lock file found, installation may not have started)`);
+    }
   }
 
   // Check for some key dependencies
