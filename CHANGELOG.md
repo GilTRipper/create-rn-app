@@ -11,12 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `-b, --bundle-id <bundleId>` flag to specify bundle identifier without prompts
 - `-d, --display-name <displayName>` flag to specify app display name without prompts
 - `-y, --yes` flag to automatically answer yes to all prompts (non-interactive mode)
+- E2E tests with GitHub Actions workflow for automated testing
+- Comprehensive test suite covering project creation, structure validation, and dependency installation
+- Support for testing with npm, pnpm, yarn, and iOS CocoaPods
 
 ### Fixed
 - Package manager detection now works correctly with all package managers (npm, yarn, pnpm)
 - Fixed `execa` import issue in template.js
 - npm install now uses `--legacy-peer-deps` flag to handle peer dependency conflicts
 - Improved error handling for package manager checks
+- AndroidManifest.xml now automatically includes `package` attribute with bundle identifier
+- Fixed iOS CocoaPods installation validation issue by ensuring AndroidManifest.xml has required package attribute
 
 ### Changed
 - CLI can now run in fully non-interactive mode with `--yes` flag

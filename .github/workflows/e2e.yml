@@ -1,0 +1,134 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  test-npm:
+    name: E2E Test with npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link CLI locally
+        run: npm link
+
+      - name: Run E2E tests with npm
+        run: npm run test:e2e -- --package-manager npm
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/test-* || true
+
+  test-pnpm:
+    name: E2E Test with pnpm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@latest --activate
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link CLI locally
+        run: npm link
+
+      - name: Run E2E tests with pnpm
+        run: npm run test:e2e -- --package-manager pnpm
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/test-* || true
+
+  test-yarn:
+    name: E2E Test with yarn
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "yarn"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link CLI locally
+        run: npm link
+
+      - name: Run E2E tests with yarn
+        run: npm run test:e2e -- --package-manager yarn
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/test-* || true
+
+  test-ios-pods:
+    name: E2E Test iOS Pods (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Link CLI locally
+        run: npm link
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+
+      - name: Install CocoaPods
+        run: gem install cocoapods
+
+      - name: Run E2E tests with pods
+        run: npm run test:e2e -- --package-manager npm --test-pods
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf /tmp/test-* || true
