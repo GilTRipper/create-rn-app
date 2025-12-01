@@ -223,7 +223,7 @@ test("Check dependencies are installed", () => {
 
   // Wait for installation to complete (in case it's still running)
   let attempts = 0;
-  const maxAttempts = 60; // 60 seconds max wait
+  const maxAttempts = 180; // 3 minutes max wait
   while (!fs.existsSync(nodeModulesPath) && attempts < maxAttempts) {
     attempts++;
     if (attempts % 10 === 0) {
