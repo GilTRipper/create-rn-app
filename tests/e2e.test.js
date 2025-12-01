@@ -48,12 +48,38 @@ function test(name, fn) {
 function cleanup() {
   if (fs.existsSync(TEST_PROJECT_PATH)) {
     log('Cleaning up test project...', 'info');
-    execSync(`rm -rf "${TEST_PROJECT_PATH}"`, { stdio: 'inherit' });
+    try {
+      execSync(`rm -rf "${TEST_PROJECT_PATH}"`, { stdio: "ignore" });
+      log("Test project cleaned up successfully", "success");
+    } catch (error) {
+      log(`Warning: Failed to cleanup test project: ${error.message}`, "info");
+    }
   }
 }
 
 // Cleanup before starting
 cleanup();
+
+// Ensure cleanup on exit (even if process is killed)
+process.on('exit', cleanup);
+process.on('SIGINT', () => {
+  cleanup();
+  process.exit(1);
+});
+process.on('SIGTERM', () => {
+  cleanup();
+  process.exit(1);
+});
+process.on('uncaughtException', (error) => {
+  log(`Uncaught exception: ${error.message}`, 'error');
+  cleanup();
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  log(`Unhandled rejection: ${reason}`, 'error');
+  cleanup();
+  process.exit(1);
+});
 
 log(`Starting E2E tests with ${packageManager}...`, 'info');
 
@@ -184,30 +210,32 @@ test('Check Android package structure', () => {
 });
 
 // Test 9: Check dependencies installation
-test('Check dependencies are installed', () => {
-  const nodeModulesPath = path.join(TEST_PROJECT_PATH, 'node_modules');
-  const packageJsonPath = path.join(TEST_PROJECT_PATH, 'package.json');
-  
+test("Check dependencies are installed", () => {
+  const nodeModulesPath = path.join(TEST_PROJECT_PATH, "node_modules");
+  const packageJsonPath = path.join(TEST_PROJECT_PATH, "package.json");
+
   // First check if project was created
   if (!fs.existsSync(packageJsonPath)) {
-    throw new Error('package.json not found - project may not have been created');
+    throw new Error(
+      "package.json not found - project may not have been created"
+    );
   }
-  
+
   // Wait for installation to complete (in case it's still running)
   let attempts = 0;
   const maxAttempts = 60; // 60 seconds max wait
   while (!fs.existsSync(nodeModulesPath) && attempts < maxAttempts) {
     attempts++;
     if (attempts % 10 === 0) {
-      log(`Waiting for dependencies installation... (${attempts}s)`, 'info');
+      log(`Waiting for dependencies installation... (${attempts}s)`, "info");
     }
     // Use setTimeout equivalent with execSync to wait
     try {
-      execSync('sleep 1', { stdio: 'ignore' });
+      execSync("sleep 1", { stdio: "ignore" });
     } catch (e) {
       // On Windows, use timeout instead
       try {
-        execSync('timeout /t 1 /nobreak >nul 2>&1', { stdio: 'ignore' });
+        execSync("timeout /t 1 /nobreak >nul 2>&1", { stdio: "ignore" });
       } catch (e2) {
         // Fallback: just wait a bit
         const start = Date.now();
@@ -217,27 +245,42 @@ test('Check dependencies are installed', () => {
       }
     }
   }
-  
+
   if (!fs.existsSync(nodeModulesPath)) {
     // Check if there's a lock file to see if installation was attempted
-    const lockFiles = ['package-lock.json', 'yarn.lock', 'pnpm-lock.yaml'];
-    const hasLockFile = lockFiles.some(lockFile => 
+    const lockFiles = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml"];
+    const foundLockFiles = lockFiles.filter(lockFile =>
       fs.existsSync(path.join(TEST_PROJECT_PATH, lockFile))
     );
-    
-    if (hasLockFile) {
-      throw new Error(`node_modules directory not found after ${maxAttempts}s wait - dependencies installation may have failed. Lock file exists, suggesting installation was attempted.`);
+
+    // Try to get more info about what happened
+    let errorDetails = "";
+    try {
+      // Check if there are any log files or error indicators
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+      errorDetails = `Package name: ${packageJson.name}, version: ${packageJson.version}`;
+    } catch (e) {
+      errorDetails = "Could not read package.json";
+    }
+
+    if (foundLockFiles.length > 0) {
+      throw new Error(
+        `node_modules directory not found after ${maxAttempts}s wait. ` +
+          `Lock file(s) found: ${foundLockFiles.join(
+            ", "
+          )} - installation was attempted but may have failed. ` +
+          `This could indicate a network issue, timeout, or dependency conflict. ${errorDetails}`
+      );
     } else {
-      throw new Error(`node_modules directory not found - dependencies were not installed (no lock file found, installation may not have started)`);
+      throw new Error(
+        `node_modules directory not found - dependencies were not installed. ` +
+          `No lock file found, installation may not have started. ${errorDetails}`
+      );
     }
   }
 
   // Check for some key dependencies
-  const keyDeps = [
-    'react',
-    'react-native',
-    '@react-navigation/native'
-  ];
+  const keyDeps = ["react", "react-native", "@react-navigation/native"];
 
   for (const dep of keyDeps) {
     const depPath = path.join(nodeModulesPath, dep);
@@ -248,19 +291,41 @@ test('Check dependencies are installed', () => {
 });
 
 // Test 10: Check package manager lock file
-test('Check package manager lock file exists', () => {
-  let lockFile;
-  if (packageManager === 'pnpm') {
-    lockFile = 'pnpm-lock.yaml';
-  } else if (packageManager === 'yarn') {
-    lockFile = 'yarn.lock';
+test("Check package manager lock file exists", () => {
+  let expectedLockFile;
+  if (packageManager === "pnpm") {
+    expectedLockFile = "pnpm-lock.yaml";
+  } else if (packageManager === "yarn") {
+    expectedLockFile = "yarn.lock";
   } else {
-    lockFile = 'package-lock.json';
+    expectedLockFile = "package-lock.json";
   }
 
-  const lockFilePath = path.join(TEST_PROJECT_PATH, lockFile);
-  if (!fs.existsSync(lockFilePath)) {
-    throw new Error(`Lock file not found: ${lockFile}`);
+  const lockFilePath = path.join(TEST_PROJECT_PATH, expectedLockFile);
+
+  // Check if expected lock file exists
+  if (fs.existsSync(lockFilePath)) {
+    return; // Success
+  }
+
+  // If expected lock file doesn't exist, check if any lock file exists
+  const allLockFiles = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml"];
+  const foundLockFiles = allLockFiles.filter(lockFile =>
+    fs.existsSync(path.join(TEST_PROJECT_PATH, lockFile))
+  );
+
+  if (foundLockFiles.length > 0) {
+    throw new Error(
+      `Expected lock file '${expectedLockFile}' not found, but found: ${foundLockFiles.join(
+        ", "
+      )}. ` +
+        `This suggests a different package manager was used than expected (${packageManager}).`
+    );
+  } else {
+    throw new Error(
+      `Lock file not found: ${expectedLockFile}. ` +
+        `No lock files found at all - dependencies installation may not have completed.`
+    );
   }
 });
 
@@ -292,10 +357,12 @@ if (testPods && process.platform === 'darwin') {
 console.log('\n' + '='.repeat(50));
 log(`Tests passed: ${testsPassed}`, 'success');
 if (testsFailed > 0) {
-  log(`Tests failed: ${testsFailed}`, 'error');
+  log(`Tests failed: ${testsFailed}`, "error");
+  cleanup(); // Cleanup before exit
   process.exit(1);
 } else {
-  log('All tests passed!', 'success');
+  log("All tests passed!", "success");
+  cleanup(); // Cleanup before exit
   process.exit(0);
 }
 

@@ -33,7 +33,10 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
+          echo "Cleaning up test projects..."
           rm -rf /tmp/test-* || true
+          rm -rf /tmp/*e2e* || true
+          echo "Cleanup completed"
 
   test-pnpm:
     name: E2E Test with pnpm
@@ -69,7 +72,10 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
+          echo "Cleaning up test projects..."
           rm -rf /tmp/test-* || true
+          rm -rf /tmp/*e2e* || true
+          echo "Cleanup completed"
 
   test-yarn:
     name: E2E Test with yarn
@@ -102,7 +108,10 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
+          echo "Cleaning up test projects..."
           rm -rf /tmp/test-* || true
+          rm -rf /tmp/*e2e* || true
+          echo "Cleanup completed"
 
   test-ios-pods:
     name: E2E Test iOS Pods (macOS)
@@ -137,4 +146,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
+          echo "Cleaning up test projects..."
           rm -rf /tmp/test-* || true
+          rm -rf /tmp/*e2e* || true
+          echo "Cleanup completed"
