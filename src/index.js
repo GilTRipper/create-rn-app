@@ -28,6 +28,10 @@ async function run() {
       "Bundle identifier (e.g., com.company.app)"
     )
     .option("-d, --display-name <displayName>", "App display name")
+    .option(
+      "--splash-screen-dir <path>",
+      "Path to directory with splash screen images (optional)"
+    )
     .action(async (projectName, options) => {
       try {
         // Check Node version

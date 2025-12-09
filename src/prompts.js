@@ -76,6 +76,33 @@ async function getPrompts(projectNameArg, options) {
     });
   }
 
+  // Ask about splash screen images directory if not provided via options
+  if (!options.splashScreenDir) {
+    questions.push({
+      type: "input",
+      name: "splashScreenDir",
+      message:
+        "Path to directory with splash screen images (optional, press Enter to skip):",
+      default: "",
+      validate: async input => {
+        if (!input || input.trim().length === 0) {
+          return true; // Optional, so empty is valid
+        }
+        const dirPath = path.isAbsolute(input)
+          ? input
+          : path.join(process.cwd(), input);
+        if (!(await fs.pathExists(dirPath))) {
+          return "Directory does not exist";
+        }
+        const stat = await fs.stat(dirPath);
+        if (!stat.isDirectory()) {
+          return "Path is not a directory";
+        }
+        return true;
+      },
+    });
+  }
+
   const answers = await inquirer.prompt(questions);
 
   // Check if directory already exists
@@ -103,6 +130,16 @@ async function getPrompts(projectNameArg, options) {
     }
   }
 
+  // Resolve splash screen directory path
+  let splashScreenDir = null;
+  const splashSource = options.splashScreenDir || answers.splashScreenDir;
+  if (splashSource && splashSource.trim().length > 0) {
+    splashScreenDir = path.isAbsolute(splashSource)
+      ? splashSource
+      : path.join(process.cwd(), splashSource);
+    splashScreenDir = path.normalize(splashScreenDir);
+  }
+
   return {
     projectName: projectNameArg || answers.projectName,
     bundleIdentifier: options.bundleId || answers.bundleIdentifier,
@@ -115,6 +152,7 @@ async function getPrompts(projectNameArg, options) {
     skipPods: options.skipPods || false,
     autoYes: options.yes || false,
     projectPath,
+    splashScreenDir,
   };
 }
 

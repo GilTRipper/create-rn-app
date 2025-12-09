@@ -65,6 +65,42 @@ npx @giltripper/create-rn-app MyApp \
 - `-b, --bundle-id <bundleId>` - Bundle identifier (e.g., `com.company.app`). If not provided, will prompt or use default based on project name.
 - `-d, --display-name <displayName>` - App display name. If not provided, will prompt or use project name.
 
+### Splash Screen
+
+During project creation, you'll be prompted to provide a path to a directory containing splash screen images. This is optional - you can press Enter to skip.
+
+**Supported directory structures:**
+
+1. **Structured format** (like [appicon.co](https://www.appicon.co/#image-sets)):
+   ```
+   splash-images/
+     ├── ios/
+     │   ├── IMG_3832.png
+     │   ├── IMG_3832@2x.png
+     │   └── IMG_3832@3x.png
+     └── android/
+         ├── drawable-hdpi/
+         │   └── IMG_3832.jpeg
+         ├── drawable-mdpi/
+         │   └── IMG_3832.jpeg
+         └── ...
+   ```
+   
+   **Note:** Files are copied with their original names. You can use any filenames you want - the tool will preserve them.
+
+2. **Flat format** (files with naming patterns):
+   ```
+   splash-images/
+     ├── splash.png
+     ├── splash@2x.png
+     ├── splash@3x.png
+     ├── splash-hdpi.png
+     ├── splash-mdpi.png
+     └── ...
+   ```
+
+The tool will automatically detect the structure and copy images to the correct locations for both iOS and Android, preserving original filenames.
+
 ### Installation Options
 
 - `--skip-install` - Skip dependency installation
@@ -101,6 +137,18 @@ npx @giltripper/create-rn-app MyApp --skip-install
 ```bash
 npx @giltripper/create-rn-app MyApp -p yarn
 ```
+
+### Create project with splash screen images
+
+When prompted, provide the path to your splash screen images directory:
+
+```bash
+npx @giltripper/create-rn-app MyApp
+# When prompted: "Path to directory with splash screen images"
+# Enter: ./splash-images
+```
+
+The tool will automatically copy and configure splash screen images for both iOS and Android.
 
 ## What's Included
 

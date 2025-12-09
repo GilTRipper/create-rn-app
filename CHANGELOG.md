@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Splash screen images support: interactive prompt to specify directory with splash screen images
+- Automatic detection and copying of splash screen images for both iOS and Android
+- Support for structured directory format (ios/ and android/ subdirectories, like appicon.co exports)
+- Support for flat directory format with naming patterns (splash.png, splash@2x.png, splash-hdpi.png, etc.)
+- Automatic mapping of splash screen images to correct locations:
+  - iOS: `ios/{projectName}/Images.xcassets/SplashScreen.imageset/`
+  - Android: `android/app/src/main/res/drawable-*/splash.png`
+
+### Fixed
+- iOS display name now forced into `Info.plist` (`CFBundleDisplayName`) during generation
+- Xcode workspace/project links updated to new app name to avoid leftover `helloworld` node
+- iOS bundle identifier forced in `.xcodeproj` to match CLI input
+- Splash assets copy logic now renames inputs to the required target names (iOS SplashScreen@* and Android splash.png), handling arbitrary source filenames
+
 ## [1.0.2] - 2025-11-30
 
 ### Added
