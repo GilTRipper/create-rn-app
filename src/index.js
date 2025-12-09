@@ -32,6 +32,10 @@ async function run() {
       "--splash-screen-dir <path>",
       "Path to directory with splash screen images (optional)"
     )
+    .option(
+      "--app-icon-dir <path>",
+      "Path to directory with app icons (optional, from appicon.co output)"
+    )
     .action(async (projectName, options) => {
       try {
         // Check Node version

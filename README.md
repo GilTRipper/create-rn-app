@@ -64,14 +64,18 @@ npx @giltripper/create-rn-app MyApp \
 
 - `-b, --bundle-id <bundleId>` - Bundle identifier (e.g., `com.company.app`). If not provided, will prompt or use default based on project name.
 - `-d, --display-name <displayName>` - App display name. If not provided, will prompt or use project name.
+- `--splash-screen-dir <path>` - Path to directory with splash screen images (optional)
+- `--app-icon-dir <path>` - Path to directory with app icons from appicon.co (optional)
 
 ### Splash Screen
 
-During project creation, you'll be prompted to provide a path to a directory containing splash screen images. This is optional - you can press Enter to skip.
+During project creation, you'll be prompted to provide a path to a directory containing splash screen images. This is optional - you can press Enter to skip and use default blank white splash screens.
+
+**💡 Recommended:** For best results, use [appicon.co Image Sets](https://www.appicon.co/#image-sets) to generate splash screen images. The tool works best with structured directory format exported by appicon.co.
 
 **Supported directory structures:**
 
-1. **Structured format** (like [appicon.co](https://www.appicon.co/#image-sets)):
+1. **Structured format** (recommended - like [appicon.co](https://www.appicon.co/#image-sets)):
    ```
    splash-images/
      ├── ios/
@@ -100,6 +104,39 @@ During project creation, you'll be prompted to provide a path to a directory con
    ```
 
 The tool will automatically detect the structure and copy images to the correct locations for both iOS and Android, preserving original filenames.
+
+**CLI option:** `--splash-screen-dir <path>` - Specify splash screen directory path directly
+
+### App Icons
+
+During project creation, you'll be prompted to provide a path to a directory containing app icons. This is optional - you can press Enter to skip and use default icons.
+
+**💡 Recommended:** Use [appicon.co](https://www.appicon.co/#app-icon) to generate app icons. The tool is optimized to work with the directory structure exported by appicon.co.
+
+**Expected directory structure** (from appicon.co export):
+```
+AppIcons/
+  ├── android/
+  │   ├── mipmap-hdpi/
+  │   │   ├── ic_launcher.png
+  │   │   └── ic_launcher_round.png
+  │   ├── mipmap-mdpi/
+  │   │   ├── ic_launcher.png
+  │   │   └── ic_launcher_round.png
+  │   └── ... (other densities)
+  └── Assets.xcassets/
+      └── AppIcon.appiconset/
+          ├── 1024.png
+          ├── 180.png
+          ├── ... (all iOS icon sizes)
+          └── Contents.json
+```
+
+The tool will automatically copy all icons to the correct locations:
+- **Android**: Icons are copied to `android/app/src/main/res/mipmap-*/` for all density folders
+- **iOS**: All PNG files and `Contents.json` are copied to `ios/{projectName}/Images.xcassets/AppIcon.appiconset/`
+
+**CLI option:** `--app-icon-dir <path>` - Specify app icon directory path directly
 
 ### Installation Options
 
@@ -148,7 +185,31 @@ npx @giltripper/create-rn-app MyApp
 # Enter: ./splash-images
 ```
 
+Or use the CLI option:
+
+```bash
+npx @giltripper/create-rn-app MyApp --splash-screen-dir ./splash-images
+```
+
 The tool will automatically copy and configure splash screen images for both iOS and Android.
+
+### Create project with app icons
+
+When prompted, provide the path to your app icons directory (from appicon.co):
+
+```bash
+npx @giltripper/create-rn-app MyApp
+# When prompted: "Path to directory with app icons from appicon.co"
+# Enter: ./AppIcons
+```
+
+Or use the CLI option:
+
+```bash
+npx @giltripper/create-rn-app MyApp --app-icon-dir ./AppIcons
+```
+
+The tool will automatically copy and configure app icons for both iOS and Android.
 
 ## What's Included
 

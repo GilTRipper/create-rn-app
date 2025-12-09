@@ -18,9 +18,17 @@ const WITH_SPLASH_PROJECT = {
   splashDir: path.join("/tmp", "test-e2e-splash-assets"),
 };
 
+const WITH_ICONS_PROJECT = {
+  name: "test-e2e-icons",
+  bundleId: "com.test.icons",
+  displayName: "Icons E2E",
+  appIconDir: path.join("/tmp", "test-e2e-icon-assets"),
+};
+
 const projectPaths = [
   path.join("/tmp", DEFAULT_PROJECT.name),
   path.join("/tmp", WITH_SPLASH_PROJECT.name),
+  path.join("/tmp", WITH_ICONS_PROJECT.name),
 ];
 
 // Parse command line arguments
@@ -79,6 +87,10 @@ function cleanupAll() {
   if (fs.existsSync(WITH_SPLASH_PROJECT.splashDir || "")) {
     cleanupPath(WITH_SPLASH_PROJECT.splashDir);
   }
+  // Also cleanup icon assets dir if created
+  if (fs.existsSync(WITH_ICONS_PROJECT.appIconDir || "")) {
+    cleanupPath(WITH_ICONS_PROJECT.appIconDir);
+  }
 }
 
 // Cleanup before starting
@@ -107,10 +119,11 @@ process.on("unhandledRejection", reason => {
 
 log(`Starting E2E tests with ${packageManager}...`, "info");
 
-function createProject({ name, bundleId, displayName, splashDir }) {
+function createProject({ name, bundleId, displayName, splashDir, appIconDir }) {
   const projectPath = path.join("/tmp", name);
   const splashFlag = splashDir ? ` --splash-screen-dir "${splashDir}"` : "";
-  const command = `create-rn-app ${name} -p ${packageManager} --bundle-id ${bundleId} --display-name "${displayName}" --skip-git --skip-install --yes${splashFlag}`;
+  const iconFlag = appIconDir ? ` --app-icon-dir "${appIconDir}"` : "";
+  const command = `create-rn-app ${name} -p ${packageManager} --bundle-id ${bundleId} --display-name "${displayName}" --skip-git --skip-install --yes${splashFlag}${iconFlag}`;
 
   log(`Running: ${command}`, "info");
   try {
@@ -175,11 +188,88 @@ function prepareSplashAssetsDir() {
   writeDummyPng(path.join(androidDir, "splash.png"), "flat");
 }
 
+function prepareAppIconsDir() {
+  const dir = WITH_ICONS_PROJECT.appIconDir;
+  fs.mkdirSync(dir, { recursive: true });
+
+  // Android icons structure
+  const androidDir = path.join(dir, "android");
+  fs.mkdirSync(androidDir, { recursive: true });
+
+  const densities = [
+    "mipmap-hdpi",
+    "mipmap-mdpi",
+    "mipmap-xhdpi",
+    "mipmap-xxhdpi",
+    "mipmap-xxxhdpi",
+  ];
+  for (const density of densities) {
+    const densityPath = path.join(androidDir, density);
+    fs.mkdirSync(densityPath, { recursive: true });
+    writeDummyPng(
+      path.join(densityPath, "ic_launcher.png"),
+      `android-${density}`
+    );
+    writeDummyPng(
+      path.join(densityPath, "ic_launcher_round.png"),
+      `android-${density}-round`
+    );
+  }
+
+  // iOS icons structure
+  const iosAppIconDir = path.join(dir, "Assets.xcassets", "AppIcon.appiconset");
+  fs.mkdirSync(iosAppIconDir, { recursive: true });
+
+  // Create some key iOS icon files
+  const iosIcons = [
+    "1024.png",
+    "180.png",
+    "120.png",
+    "87.png",
+    "60.png",
+    "40.png",
+    "29.png",
+  ];
+  iosIcons.forEach(icon => {
+    writeDummyPng(path.join(iosAppIconDir, icon), `ios-${icon}`);
+  });
+
+  // Create Contents.json
+  const contentsJson = {
+    images: [
+      {
+        filename: "1024.png",
+        idiom: "ios-marketing",
+        scale: "1x",
+        size: "1024x1024",
+      },
+      {
+        filename: "180.png",
+        idiom: "iphone",
+        scale: "3x",
+        size: "60x60",
+      },
+    ],
+    info: {
+      author: "xcode",
+      version: 1,
+    },
+  };
+  fs.writeFileSync(
+    path.join(iosAppIconDir, "Contents.json"),
+    JSON.stringify(contentsJson, null, 2)
+  );
+}
+
 const DEFAULT_PROJECT_PATH = createProject(DEFAULT_PROJECT);
 
 // Prepare custom splash assets and create project with them
 prepareSplashAssetsDir();
 const WITH_SPLASH_PROJECT_PATH = createProject(WITH_SPLASH_PROJECT);
+
+// Prepare custom app icons and create project with them
+prepareAppIconsDir();
+const WITH_ICONS_PROJECT_PATH = createProject(WITH_ICONS_PROJECT);
 
 // Test 2: Check project structure
 test("Check project structure", () => {
@@ -438,6 +528,181 @@ test("Check default splash placeholders exist", () => {
     if (size === 0)
       throw new Error(`Android splash placeholder is empty: ${file}`);
   }
+});
+
+// Test 17: Default app icons exist when no icons provided
+test("Check default app icons exist", () => {
+  // Check Android default icons exist
+  const densities = [
+    "mipmap-hdpi",
+    "mipmap-mdpi",
+    "mipmap-xhdpi",
+    "mipmap-xxhdpi",
+    "mipmap-xxxhdpi",
+  ];
+  for (const density of densities) {
+    const launcherPath = path.join(
+      DEFAULT_PROJECT_PATH,
+      "android/app/src/main/res",
+      density,
+      "ic_launcher.png"
+    );
+    const launcherRoundPath = path.join(
+      DEFAULT_PROJECT_PATH,
+      "android/app/src/main/res",
+      density,
+      "ic_launcher_round.png"
+    );
+
+    if (!fs.existsSync(launcherPath)) {
+      throw new Error(`Missing Android default icon: ${launcherPath}`);
+    }
+    if (!fs.existsSync(launcherRoundPath)) {
+      throw new Error(
+        `Missing Android default round icon: ${launcherRoundPath}`
+      );
+    }
+
+    const launcherSize = fs.statSync(launcherPath).size;
+    const launcherRoundSize = fs.statSync(launcherRoundPath).size;
+    if (launcherSize === 0) {
+      throw new Error(`Android default icon is empty: ${launcherPath}`);
+    }
+    if (launcherRoundSize === 0) {
+      throw new Error(
+        `Android default round icon is empty: ${launcherRoundPath}`
+      );
+    }
+  }
+
+  // Check iOS default icons exist
+  const iosAppIconPath = path.join(
+    DEFAULT_PROJECT_PATH,
+    `ios/${DEFAULT_PROJECT.name}/Images.xcassets/AppIcon.appiconset`
+  );
+  if (!fs.existsSync(iosAppIconPath)) {
+    throw new Error(
+      `Missing iOS AppIcon.appiconset directory: ${iosAppIconPath}`
+    );
+  }
+
+  // Check that Contents.json exists
+  const contentsJsonPath = path.join(iosAppIconPath, "Contents.json");
+  if (!fs.existsSync(contentsJsonPath)) {
+    throw new Error(`Missing iOS Contents.json: ${contentsJsonPath}`);
+  }
+
+  // Check that at least some icon files exist
+  const iconFiles = fs
+    .readdirSync(iosAppIconPath)
+    .filter(file => /\.(png|PNG)$/.test(file));
+  if (iconFiles.length === 0) {
+    throw new Error(`No iOS icon files found in: ${iosAppIconPath}`);
+  }
+});
+
+// Test 18: Custom app icons are copied when provided
+test("Check custom app icons copied", () => {
+  // Check Android icons
+  const androidSourceDir = path.join(WITH_ICONS_PROJECT.appIconDir, "android");
+  const densities = [
+    "mipmap-hdpi",
+    "mipmap-mdpi",
+    "mipmap-xhdpi",
+    "mipmap-xxhdpi",
+    "mipmap-xxxhdpi",
+  ];
+
+  for (const density of densities) {
+    const sourceLauncher = path.join(
+      androidSourceDir,
+      density,
+      "ic_launcher.png"
+    );
+    const sourceLauncherRound = path.join(
+      androidSourceDir,
+      density,
+      "ic_launcher_round.png"
+    );
+
+    const targetLauncher = path.join(
+      WITH_ICONS_PROJECT_PATH,
+      "android/app/src/main/res",
+      density,
+      "ic_launcher.png"
+    );
+    const targetLauncherRound = path.join(
+      WITH_ICONS_PROJECT_PATH,
+      "android/app/src/main/res",
+      density,
+      "ic_launcher_round.png"
+    );
+
+    // Check ic_launcher.png
+    if (!fs.existsSync(targetLauncher)) {
+      throw new Error(`Missing copied Android icon: ${targetLauncher}`);
+    }
+    const srcLauncher = fs.readFileSync(sourceLauncher);
+    const dstLauncher = fs.readFileSync(targetLauncher);
+    if (!srcLauncher.equals(dstLauncher)) {
+      throw new Error(
+        `Android icon file differs from source: ${density}/ic_launcher.png`
+      );
+    }
+
+    // Check ic_launcher_round.png
+    if (!fs.existsSync(targetLauncherRound)) {
+      throw new Error(
+        `Missing copied Android round icon: ${targetLauncherRound}`
+      );
+    }
+    const srcLauncherRound = fs.readFileSync(sourceLauncherRound);
+    const dstLauncherRound = fs.readFileSync(targetLauncherRound);
+    if (!srcLauncherRound.equals(dstLauncherRound)) {
+      throw new Error(
+        `Android round icon file differs from source: ${density}/ic_launcher_round.png`
+      );
+    }
+  }
+
+  // Check iOS icons
+  const iosSourceDir = path.join(
+    WITH_ICONS_PROJECT.appIconDir,
+    "Assets.xcassets",
+    "AppIcon.appiconset"
+  );
+  const iosTargetDir = path.join(
+    WITH_ICONS_PROJECT_PATH,
+    `ios/${WITH_ICONS_PROJECT.name}/Images.xcassets/AppIcon.appiconset`
+  );
+
+  // Check Contents.json
+  const sourceContents = path.join(iosSourceDir, "Contents.json");
+  const targetContents = path.join(iosTargetDir, "Contents.json");
+  if (!fs.existsSync(targetContents)) {
+    throw new Error(`Missing copied iOS Contents.json: ${targetContents}`);
+  }
+  const srcContents = fs.readFileSync(sourceContents);
+  const dstContents = fs.readFileSync(targetContents);
+  if (!srcContents.equals(dstContents)) {
+    throw new Error("iOS Contents.json differs from source");
+  }
+
+  // Check icon files
+  const iosIconFiles = ["1024.png", "180.png", "120.png", "87.png", "60.png"];
+  iosIconFiles.forEach(iconFile => {
+    const sourceIcon = path.join(iosSourceDir, iconFile);
+    const targetIcon = path.join(iosTargetDir, iconFile);
+
+    if (!fs.existsSync(targetIcon)) {
+      throw new Error(`Missing copied iOS icon: ${iconFile}`);
+    }
+    const srcIcon = fs.readFileSync(sourceIcon);
+    const dstIcon = fs.readFileSync(targetIcon);
+    if (!srcIcon.equals(dstIcon)) {
+      throw new Error(`iOS icon file differs from source: ${iconFile}`);
+    }
+  });
 });
 
 // Test 16: Custom splash assets are copied when provided

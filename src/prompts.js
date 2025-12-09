@@ -103,6 +103,33 @@ async function getPrompts(projectNameArg, options) {
     });
   }
 
+  // Ask about app icon directory if not provided via options
+  if (!options.appIconDir) {
+    questions.push({
+      type: "input",
+      name: "appIconDir",
+      message:
+        "Path to directory with app icons from appicon.co (optional, press Enter to skip):",
+      default: "",
+      validate: async input => {
+        if (!input || input.trim().length === 0) {
+          return true; // Optional, so empty is valid
+        }
+        const dirPath = path.isAbsolute(input)
+          ? input
+          : path.join(process.cwd(), input);
+        if (!(await fs.pathExists(dirPath))) {
+          return "Directory does not exist";
+        }
+        const stat = await fs.stat(dirPath);
+        if (!stat.isDirectory()) {
+          return "Path is not a directory";
+        }
+        return true;
+      },
+    });
+  }
+
   const answers = await inquirer.prompt(questions);
 
   // Check if directory already exists
@@ -140,6 +167,16 @@ async function getPrompts(projectNameArg, options) {
     splashScreenDir = path.normalize(splashScreenDir);
   }
 
+  // Resolve app icon directory path
+  let appIconDir = null;
+  const appIconSource = options.appIconDir || answers.appIconDir;
+  if (appIconSource && appIconSource.trim().length > 0) {
+    appIconDir = path.isAbsolute(appIconSource)
+      ? appIconSource
+      : path.join(process.cwd(), appIconSource);
+    appIconDir = path.normalize(appIconDir);
+  }
+
   return {
     projectName: projectNameArg || answers.projectName,
     bundleIdentifier: options.bundleId || answers.bundleIdentifier,
@@ -153,6 +190,7 @@ async function getPrompts(projectNameArg, options) {
     autoYes: options.yes || false,
     projectPath,
     splashScreenDir,
+    appIconDir,
   };
 }
 

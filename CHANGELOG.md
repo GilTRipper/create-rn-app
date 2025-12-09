@@ -15,11 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic mapping of splash screen images to correct locations:
   - iOS: `ios/{projectName}/Images.xcassets/SplashScreen.imageset/`
   - Android: `android/app/src/main/res/drawable-*/splash.png`
+- App icons support: interactive prompt to specify directory with app icons from appicon.co
+- Automatic copying of app icons for both iOS and Android from appicon.co export structure
+- Support for appicon.co directory structure:
+  - Android: `android/mipmap-*/ic_launcher.png` and `ic_launcher_round.png` for all densities
+  - iOS: `Assets.xcassets/AppIcon.appiconset/` with all PNG files and Contents.json
+- Default blank white splash screens when no splash directory is provided
+- CLI option `--splash-screen-dir <path>` to specify splash screen directory
+- CLI option `--app-icon-dir <path>` to specify app icon directory
 
 ### Fixed
-- iOS display name now forced into `Info.plist` (`CFBundleDisplayName`) during generation
+- iOS display name now forced into `Info.plist` (`CFBundleDisplayName` and `CFBundleName`) during generation
+- Android `app_name` in `strings.xml` now correctly set to display name
+- Android package directory structure now correctly nested for multi-part bundle IDs (e.g., `com.dev.family.gifted` creates proper nested folders)
+- iOS bundle identifier forced in `.xcodeproj` to match CLI input (replaces default `org.reactjs.native.example.*`)
 - Xcode workspace/project links updated to new app name to avoid leftover `helloworld` node
-- iOS bundle identifier forced in `.xcodeproj` to match CLI input
 - Splash assets copy logic now renames inputs to the required target names (iOS SplashScreen@* and Android splash.png), handling arbitrary source filenames
 
 ## [1.0.2] - 2025-11-30
