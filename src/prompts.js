@@ -76,8 +76,8 @@ async function getPrompts(projectNameArg, options) {
     });
   }
 
-  // Ask about splash screen images directory if not provided via options
-  if (!options.splashScreenDir) {
+  // Ask about splash screen images directory if not provided via options and not in non-interactive mode
+  if (!options.splashScreenDir && !options.yes) {
     questions.push({
       type: "input",
       name: "splashScreenDir",
@@ -103,8 +103,8 @@ async function getPrompts(projectNameArg, options) {
     });
   }
 
-  // Ask about app icon directory if not provided via options
-  if (!options.appIconDir) {
+  // Ask about app icon directory if not provided via options and not in non-interactive mode
+  if (!options.appIconDir && !options.yes) {
     questions.push({
       type: "input",
       name: "appIconDir",
@@ -138,22 +138,33 @@ async function getPrompts(projectNameArg, options) {
     projectNameArg || answers.projectName
   );
   if (await fs.pathExists(projectPath)) {
-    const { overwrite } = await inquirer.prompt([
-      {
-        type: "confirm",
-        name: "overwrite",
-        message: chalk.yellow(
+    // In non-interactive mode, skip overwrite prompt and just overwrite
+    if (options.yes) {
+      console.log(
+        chalk.cyan(
           `Directory ${
             projectNameArg || answers.projectName
-          } already exists. Overwrite?`
-        ),
-        default: false,
-      },
-    ]);
+          } already exists. Overwriting...`
+        )
+      );
+    } else {
+      const { overwrite } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "overwrite",
+          message: chalk.yellow(
+            `Directory ${
+              projectNameArg || answers.projectName
+            } already exists. Overwrite?`
+          ),
+          default: false,
+        },
+      ]);
 
-    if (!overwrite) {
-      console.log(chalk.red("Aborted."));
-      process.exit(0);
+      if (!overwrite) {
+        console.log(chalk.red("Aborted."));
+        process.exit(0);
+      }
     }
   }
 
