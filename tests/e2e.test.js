@@ -783,11 +783,11 @@ console.log('\n' + '='.repeat(50));
 log(`Tests passed: ${testsPassed}`, 'success');
 if (testsFailed > 0) {
   log(`Tests failed: ${testsFailed}`, "error");
-  cleanup(); // Cleanup before exit
+  cleanupAll(); // Cleanup before exit
   process.exit(1);
 } else {
   log("All tests passed!", "success");
-  cleanup(); // Cleanup before exit
+  cleanupAll(); // Cleanup before exit
   process.exit(0);
 }
 
