@@ -5,6 +5,1251 @@ const ora = require('ora');
 const execa = require("execa");
 const { replaceInFile } = require("./utils");
 
+const capitalize = str => str.charAt(0).toUpperCase() + str.slice(1);
+
+async function ensureManifestPackage(manifestPath, bundleIdentifier) {
+  if (!(await fs.pathExists(manifestPath))) return;
+
+  let manifestContent = await fs.readFile(manifestPath, "utf8");
+  if (!manifestContent.includes("package=")) {
+    manifestContent = manifestContent.replace(
+      /<manifest\s+xmlns:android="http:\/\/schemas\.android\.com\/apk\/res\/android">/,
+      `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${bundleIdentifier}">`
+    );
+    await fs.writeFile(manifestPath, manifestContent, "utf8");
+  }
+}
+
+async function copyAndroidEnvSources(
+  selectedEnvs,
+  projectPath,
+  bundleIdentifier
+) {
+  if (!selectedEnvs || selectedEnvs.length < 1) return;
+
+  const mainSrcPath = path.join(projectPath, "android/app/src/main");
+  for (const env of selectedEnvs) {
+    const envDir = path.join(projectPath, `android/app/src/${env}`);
+    await fs.ensureDir(envDir);
+    await fs.copy(mainSrcPath, envDir, {
+      overwrite: true,
+      filter: src =>
+        !src.includes(`${path.sep}java${path.sep}`) && !src.endsWith(".kt"),
+    });
+
+    const envManifest = path.join(envDir, "AndroidManifest.xml");
+    await ensureManifestPackage(envManifest, bundleIdentifier);
+  }
+}
+
+function buildEnvConfigFilesBlock(selectedEnvs) {
+  const lines = selectedEnvs
+    .map(env => {
+      const lower = env.toLowerCase();
+      return [
+        `  ${lower}debug: ".env.${lower}",`,
+        `  ${lower}release: ".env.${lower}",`,
+      ].join("\n");
+    })
+    .join("\n");
+  return `project.ext.envConfigFiles = [\n${lines}\n]`;
+}
+
+function buildProductFlavorsBlock(selectedEnvs, bundleIdentifier) {
+  const flavors = selectedEnvs
+    .map(env => {
+      const lower = env.toLowerCase();
+      return `        ${lower} {\n            dimension "default"\n            applicationId "${bundleIdentifier}"\n            resValue "string", "build_config_package", "${bundleIdentifier}"\n        }`;
+    })
+    .join("\n");
+
+  return `    flavorDimensions "default"\n    productFlavors {\n${flavors}\n    }`;
+}
+
+async function updateAndroidBuildGradle(
+  selectedEnvs,
+  projectPath,
+  bundleIdentifier
+) {
+  if (!selectedEnvs || selectedEnvs.length < 1) return;
+
+  const buildGradlePath = path.join(projectPath, "android/app/build.gradle");
+  if (!(await fs.pathExists(buildGradlePath))) return;
+
+  let content = await fs.readFile(buildGradlePath, "utf8");
+
+  const envBlock = buildEnvConfigFilesBlock(selectedEnvs);
+  const envRegex = /project\.ext\.envConfigFiles\s*=\s*\[[\s\S]*?\]/m;
+  if (envRegex.test(content)) {
+    content = content.replace(envRegex, envBlock);
+  } else {
+    content = content.replace(
+      /apply from: .*dotenv\.gradle\n/,
+      match => `${match}${envBlock}\n`
+    );
+  }
+
+  const flavorsBlock = buildProductFlavorsBlock(selectedEnvs, bundleIdentifier);
+  const productFlavorsRegex =
+    /flavorDimensions[\s\S]*?productFlavors\s*\{[\s\S]*?\}/m;
+  if (productFlavorsRegex.test(content)) {
+    content = content.replace(productFlavorsRegex, flavorsBlock);
+  } else {
+    const androidBlockRegex =
+      /android\s*\{[\s\S]*?defaultConfig\s*\{[\s\S]*?\}/m;
+    if (androidBlockRegex.test(content)) {
+      content = content.replace(
+        androidBlockRegex,
+        match => `${match}\n${flavorsBlock}\n`
+      );
+    }
+  }
+
+  await fs.writeFile(buildGradlePath, content, "utf8");
+}
+
+function buildPreActionBlock(buildableReference, env) {
+  const escapedEnv = env.toLowerCase();
+  const projectDirVar = "${PROJECT_DIR}";
+  return `  <PreActions>\n      <ExecutionAction\n         ActionType = \"Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction\">\n         <ActionContent\n            title = \"Run Script\"\n            scriptText = \"cp \\&quot;${projectDirVar}/../.env.${escapedEnv}\\&quot; \\&quot;${projectDirVar}/../.env\\&quot;\\n\">\n            <EnvironmentBuildable>\n${buildableReference}\n            </EnvironmentBuildable>\n         </ActionContent>\n      </ExecutionAction>\n   </PreActions>\n`;
+}
+
+function injectPreActionIntoSection(schemeContent, tag, preAction) {
+  // Remove existing PreActions within the section
+  const sectionRegex = new RegExp(
+    `<${tag}[^>]*>[\\s\\S]*?<\\/` + tag + `>`,
+    "m"
+  );
+  const match = schemeContent.match(sectionRegex);
+  if (!match) return schemeContent;
+
+  let section = match[0];
+  section = section.replace(/<PreActions>[\s\S]*?<\/PreActions>/g, "");
+  // Insert preAction right after the opening tag
+  section = section.replace(new RegExp(`(<${tag}[^>]*>)`), `$1\n${preAction}`);
+
+  return schemeContent.replace(sectionRegex, section);
+}
+
+async function createIosEnvSchemes(
+  selectedEnvs,
+  projectPath,
+  projectName,
+  buildableRefs = {}
+) {
+  if (!selectedEnvs || selectedEnvs.length < 1) return;
+
+  const envsForSchemes = selectedEnvs.filter(
+    env => env.toLowerCase() !== "production"
+  );
+
+  const schemesDir = path.join(
+    projectPath,
+    `ios/${projectName}.xcodeproj/xcshareddata/xcschemes`
+  );
+  const workspaceSchemesDir = path.join(
+    projectPath,
+    `ios/${projectName}.xcworkspace/xcshareddata`
+  );
+  if (!(await fs.pathExists(schemesDir))) return;
+
+  const schemeFiles = (await fs.readdir(schemesDir)).filter(file =>
+    file.endsWith(".xcscheme")
+  );
+  if (schemeFiles.length === 0) return;
+
+  const baseSchemePath = path.join(schemesDir, schemeFiles[0]);
+  let baseSchemeContent = await fs.readFile(baseSchemePath, "utf8");
+  baseSchemeContent = baseSchemeContent
+    .replace(/HelloWorld/g, projectName)
+    .replace(/helloworld/g, projectName.toLowerCase());
+  const buildableMatch = baseSchemeContent.match(
+    /<BuildableReference[\s\S]*?<\/BuildableReference>/
+  );
+  const baseBuildableReference =
+    buildableRefs.base?.ref || (buildableMatch ? buildableMatch[0] : null);
+
+  // Ensure base scheme name matches project
+  const desiredBaseScheme = `${projectName}.xcscheme`;
+  if (path.basename(baseSchemePath) !== desiredBaseScheme) {
+    await fs.move(baseSchemePath, path.join(schemesDir, desiredBaseScheme), {
+      overwrite: true,
+    });
+  }
+
+  if (!baseBuildableReference) return;
+
+  // Create Info.plist copies for each env scheme (excluding production)
+  const baseInfoPlist = path.join(projectPath, `ios/${projectName}/Info.plist`);
+  for (const env of envsForSchemes) {
+    const envPlistPath = path.join(
+      projectPath,
+      `ios/${projectName} ${env}-Info.plist`
+    );
+    if (await fs.pathExists(baseInfoPlist)) {
+      await fs.copy(baseInfoPlist, envPlistPath, { overwrite: true });
+    }
+  }
+
+  // Always add pre-actions to production/base scheme (.env.production)
+  console.log(chalk.blue(`  Updating production scheme: ${desiredBaseScheme}`));
+  const prodPreAction = buildPreActionBlock(
+    baseBuildableReference,
+    "production"
+  );
+  let prodSchemeContent = baseSchemeContent.replace(
+    /<Scheme[^>]*>/,
+    `<Scheme LastUpgradeVersion = "1610" version = "1.7">`
+  );
+  prodSchemeContent = injectPreActionIntoSection(
+    prodSchemeContent,
+    "BuildAction",
+    prodPreAction
+  );
+  prodSchemeContent = injectPreActionIntoSection(
+    prodSchemeContent,
+    "LaunchAction",
+    prodPreAction
+  );
+  await fs.writeFile(
+    path.join(schemesDir, desiredBaseScheme),
+    prodSchemeContent,
+    "utf8"
+  );
+  console.log(chalk.green(`  ✅ Production scheme updated`));
+
+  for (const env of envsForSchemes) {
+    const schemeName = `${projectName}${capitalize(env)}`;
+    console.log(
+      chalk.blue(`  Creating scheme for ${env}: ${schemeName}.xcscheme`)
+    );
+    const envBuildableRef =
+      buildableRefs.envs?.[env]?.ref || baseBuildableReference;
+    const targetPath = path.join(schemesDir, `${schemeName}.xcscheme`);
+    let schemeContent = baseSchemeContent.replace(
+      /<Scheme[^>]*>/,
+      `<Scheme LastUpgradeVersion = "1610" version = "1.7">`
+    );
+
+    // Inject pre-actions into BuildAction (replace existing PreActions)
+    const preAction = buildPreActionBlock(envBuildableRef, env);
+    schemeContent = injectPreActionIntoSection(
+      schemeContent,
+      "BuildAction",
+      preAction
+    );
+    schemeContent = injectPreActionIntoSection(
+      schemeContent,
+      "LaunchAction",
+      preAction
+    );
+
+    await fs.writeFile(targetPath, schemeContent, "utf8");
+    console.log(chalk.green(`  ✅ Scheme ${schemeName}.xcscheme created`));
+
+    if (workspaceSchemesDir) {
+      await fs.ensureDir(workspaceSchemesDir);
+    }
+  }
+
+  console.log(
+    chalk.green(
+      `✅ Created ${envsForSchemes.length} environment scheme(s) + production scheme`
+    )
+  );
+}
+
+async function updatePodfileForEnvs(selectedEnvs, projectPath, projectName) {
+  if (!selectedEnvs || selectedEnvs.length < 1) return;
+
+  const podfilePath = path.join(projectPath, "ios/Podfile");
+  if (!(await fs.pathExists(podfilePath))) return;
+
+  const envsForTargets = selectedEnvs.filter(
+    env => env.toLowerCase() !== "production"
+  );
+  const targets = envsForTargets.map(env => `${projectName}${capitalize(env)}`);
+  const targetBlocks = targets
+    .map(
+      target => `  target '${target}' do
+  end
+`
+    )
+    .join("\n");
+
+  const podfileContent = `def node_require(script)
+  # Resolve script with node to allow for hoisting
+  require Pod::Executable.execute_command('node', ['-p',
+    "require.resolve(
+     '\#{script}',
+     {paths: [process.argv[1]]},
+    )", __dir__]).strip
+end
+
+# Use it to require both react-native's and this package's scripts:
+node_require('react-native/scripts/react_native_pods.rb')
+node_require('react-native-permissions/scripts/setup.rb')
+
+platform :ios, 15.6
+prepare_react_native_project!
+
+setup_permissions([
+  'Camera',
+  'LocationAccuracy',
+  'LocationAlways',
+  'LocationWhenInUse',
+  'MediaLibrary',
+  'PhotoLibrary',
+  'PhotoLibraryAddOnly'
+])
+
+linkage = ENV['USE_FRAMEWORKS']
+if linkage != nil
+  Pod::UI.puts "Configuring Pod with \#{linkage}ally linked Frameworks".green
+  use_frameworks! :linkage => linkage.to_sym
+end
+
+abstract_target '${projectName}CommonPods' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :app_path => "\#{Pod::Config.instance.installation_root}/.."
+  )
+
+  pod 'FirebaseCore', :modular_headers => true
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'react-native-maps', :path => '../node_modules/react-native-maps', :subspecs => ['Google']
+  pod 'FirebaseRemoteConfig', :modular_headers => true
+  pod 'FirebaseABTesting', :modular_headers => true
+  pod 'FirebaseInstallations', :modular_headers => true
+
+${targetBlocks}
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false
+    )
+
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['SWIFT_VERSION'] = '5.0'
+      end
+    end
+
+    installer.pods_project.build_configurations.each do |config|
+      config.build_settings['SWIFT_VERSION'] = '5.0'
+    end
+  end
+end
+`;
+
+  await fs.writeFile(podfilePath, podfileContent, "utf8");
+}
+
+function genId() {
+  return Array.from({ length: 24 }, () =>
+    Math.floor(Math.random() * 16)
+      .toString(16)
+      .toUpperCase()
+  ).join("");
+}
+
+function cloneBuildConfigBlock(baseBlock, newId, newName, envPlistName) {
+  // Extract the original ID from the block
+  const originalIdMatch = baseBlock.match(/^(\s*)(\w{24})\s\/\*.*?\*\//);
+  if (!originalIdMatch) return baseBlock;
+
+  const originalIndent = originalIdMatch[1];
+  const originalId = originalIdMatch[2];
+
+  // Replace ID in the first line, preserving original indentation
+  let block = baseBlock.replace(
+    new RegExp(`^\\s*${originalId}\\s/\\*.*?\\*/`),
+    `${originalIndent}${newId} /* ${newName} */`
+  );
+
+  // Replace name and INFOPLIST_FILE
+  // If newName contains spaces, it must be quoted in project.pbxproj
+  const nameValue = newName.includes(" ") ? `"${newName}"` : newName;
+  // Replace name field (outside buildSettings, at the end of the block)
+  // Match: name = <value>; where value can be quoted or unquoted
+  block = block.replace(/name = ("[^"]*"|[^;]+);/, `name = ${nameValue};`);
+  // Replace INFOPLIST_FILE inside buildSettings
+  block = block.replace(
+    /INFOPLIST_FILE = [^;]+;/,
+    `INFOPLIST_FILE = "${envPlistName}";`
+  );
+
+  return block;
+}
+
+async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
+  if (!selectedEnvs || selectedEnvs.length < 1) return null;
+
+  const envs = selectedEnvs.filter(env => env.toLowerCase() !== "production");
+  if (envs.length === 0) return null;
+
+  const pbxprojPath = path.join(
+    projectPath,
+    `ios/${projectName}.xcodeproj/project.pbxproj`
+  );
+  if (!(await fs.pathExists(pbxprojPath))) return null;
+
+  let content = await fs.readFile(pbxprojPath, "utf8");
+
+  // Locate base application target (first application PBXNativeTarget)
+  // First find the PBXNativeTarget section
+  const nativeTargetSectionMatch = content.match(
+    /\/\* Begin PBXNativeTarget section \*\/\s*([\s\S]*?)\/\* End PBXNativeTarget section \*\//m
+  );
+  if (!nativeTargetSectionMatch) {
+    console.log(chalk.yellow("⚠️  Could not find PBXNativeTarget section"));
+    return null;
+  }
+
+  const nativeTargetSection = nativeTargetSectionMatch[1];
+
+  // Find any PBXNativeTarget with application product type in that section
+  const targetBlockRegex =
+    /(\w{24}) \/\* .*? \*\/ = \{[\s\S]*?isa = PBXNativeTarget;[\s\S]*?productType = "com\.apple\.product-type\.application";[\s\S]*?\};/m;
+  const targetBlockMatch = nativeTargetSection.match(targetBlockRegex);
+  if (!targetBlockMatch) {
+    console.log(
+      chalk.yellow(
+        "⚠️  Could not find base application target in PBXNativeTarget section"
+      )
+    );
+    return null;
+  }
+  const targetBlock = targetBlockMatch[0];
+  const baseTargetId = targetBlockMatch[1];
+
+  // Extract IDs from the target block
+  const configListMatch = targetBlock.match(
+    /buildConfigurationList = (\w{24}) \/\* Build configuration list for PBXNativeTarget ".*?" \*\//
+  );
+  const productRefMatch = targetBlock.match(
+    /productReference = (\w{24}) \/\* .*?\.app \*\//
+  );
+
+  if (!configListMatch || !productRefMatch) {
+    console.log(
+      chalk.yellow("⚠️  Could not extract IDs from base target block")
+    );
+    return null;
+  }
+
+  const baseConfigListId = configListMatch[1];
+  const baseProductRefId = productRefMatch[1];
+
+  // Base names
+  const baseNameMatch = targetBlock.match(/name = ([^;]+);/);
+  const baseName = baseNameMatch ? baseNameMatch[1].trim() : projectName;
+  const baseProductNameMatch = targetBlock.match(
+    /productReference = \w{24} \/\* (.*?)\.app \*\//
+  );
+  const baseProductName = baseProductNameMatch
+    ? baseProductNameMatch[1]
+    : baseName;
+
+  // Sections
+  const section = re => content.match(re)?.[0] || "";
+  const fileRefSectionRe =
+    /\/\* Begin PBXFileReference section \*\/[\s\S]*?\/\* End PBXFileReference section \*\//m;
+  const nativeSectionRe =
+    /\/\* Begin PBXNativeTarget section \*\/[\s\S]*?\/\* End PBXNativeTarget section \*\//m;
+  const configListSectionRe =
+    /\/\* Begin XCConfigurationList section \*\/[\s\S]*?\/\* End XCConfigurationList section \*\//m;
+  const configSectionRe =
+    /\/\* Begin XCBuildConfiguration section \*\/[\s\S]*?\/\* End XCBuildConfiguration section \*\//m;
+
+  let fileRefSection = section(fileRefSectionRe);
+  let nativeSection = section(nativeSectionRe);
+  let configListSection = section(configListSectionRe);
+  let configSection = section(configSectionRe);
+
+  if (
+    !fileRefSection ||
+    !nativeSection ||
+    !configListSection ||
+    !configSection
+  ) {
+    console.log(
+      chalk.yellow("⚠️  Could not find required sections in project.pbxproj")
+    );
+    return null;
+  }
+
+  const productsGroupRegex =
+    /\/\* Products \*\/ = {\s*isa = PBXGroup;\s*children = \(\s*([\s\S]*?)\);\s*name = Products;/m;
+  const productsMatch = content.match(productsGroupRegex);
+  let productsChildren = productsMatch ? productsMatch[1] : "";
+
+  const projectTargetsRegex =
+    /targets = \(\s*([\s\S]*?)\);\s*\};\s*\/\* End PBXProject section \*\//m;
+  const projectTargetsMatch = content.match(projectTargetsRegex);
+  let projectTargets = projectTargetsMatch ? projectTargetsMatch[1] : "";
+
+  // Find TargetAttributes section to add new targets
+  const targetAttributesRegex = /TargetAttributes = \{([\s\S]*?)\};/m;
+  const targetAttributesMatch = content.match(targetAttributesRegex);
+  let targetAttributes = targetAttributesMatch ? targetAttributesMatch[1] : "";
+
+  // Base product ref block
+  const productRefRegex = new RegExp(
+    `${baseProductRefId} /\\* .*?\\.app \\*/ = \\{[\\s\\S]*?\\};`,
+    "m"
+  );
+  const productRefBlockMatch = content.match(productRefRegex);
+  if (!productRefBlockMatch) {
+    console.log(
+      chalk.yellow(`⚠️  Could not find product reference ${baseProductRefId}`)
+    );
+    return null;
+  }
+
+  // Config list block and config blocks
+  const configListRegex = new RegExp(
+    `${baseConfigListId} /\\* Build configuration list for PBXNativeTarget ".*?" \\*/ = {[\\s\\S]*?buildConfigurations = \\(([^)]*?)\\);[\\s\\S]*?};`,
+    "m"
+  );
+  const configListBlockMatch = content.match(configListRegex);
+  if (!configListBlockMatch) {
+    console.log(
+      chalk.yellow(`⚠️  Could not find config list ${baseConfigListId}`)
+    );
+    return null;
+  }
+  const configIdsRaw = configListBlockMatch[1]
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  // Extract only IDs (24 hex chars) from strings like "13B07F941A680F5B00A75B9A /* Debug */"
+  const configIds = configIdsRaw
+    .map(s => {
+      const idMatch = s.match(/(\w{24})/);
+      return idMatch ? idMatch[1] : null;
+    })
+    .filter(Boolean);
+
+  if (configIds.length === 0) {
+    console.log(chalk.yellow("⚠️  No config IDs found"));
+    return null;
+  }
+  // Find config blocks in XCBuildConfiguration section
+  const configSectionMatch = content.match(
+    /\/\* Begin XCBuildConfiguration section \*\/\s*([\s\S]*?)\/\* End XCBuildConfiguration section \*\//m
+  );
+  if (!configSectionMatch) {
+    console.log(
+      chalk.yellow("⚠️  Could not find XCBuildConfiguration section")
+    );
+    return null;
+  }
+
+  const configSectionContent = configSectionMatch[1];
+  const configBlocks = {};
+  for (const id of configIds) {
+    // Search within config section for better accuracy
+    // Need to match the entire block including nested braces in buildSettings
+    // Match from ID to the closing "};" - need to balance braces
+    const idPattern = id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const blockStart = new RegExp(`${idPattern} /\\* .*? \\*/ = \\{`, "m");
+    const startMatch = configSectionContent.match(blockStart);
+    if (startMatch) {
+      const startPos = startMatch.index;
+      let braceCount = 1; // Start at 1 because we're already inside the opening brace
+      let pos = startMatch[0].length + startPos;
+      let foundEnd = false;
+
+      // Find the matching closing brace
+      while (pos < configSectionContent.length && !foundEnd) {
+        const char = configSectionContent[pos];
+        if (char === "{") braceCount++;
+        if (char === "}") {
+          braceCount--;
+          if (braceCount === 0) {
+            // Found the closing brace for our block
+            // Check if next character is semicolon
+            if (
+              pos + 1 < configSectionContent.length &&
+              configSectionContent[pos + 1] === ";"
+            ) {
+              const block = configSectionContent.substring(startPos, pos + 2); // +2 for "};"
+              // Check if block contains invalid "Swift" field (without VERSION)
+              if (block.match(/^\s*Swift\s*=/m)) {
+                console.log(
+                  chalk.yellow(
+                    `⚠️  Found invalid "Swift" field in extracted block ${id}, will be removed during cleanup`
+                  )
+                );
+              }
+              configBlocks[id] = block;
+              foundEnd = true;
+            }
+          }
+        }
+        pos++;
+      }
+
+      if (!foundEnd) {
+        console.log(
+          chalk.yellow(
+            `⚠️  Could not find end of config block ${id} using brace matching, trying regex fallback...`
+          )
+        );
+        // Fallback: try to find block using a more greedy approach
+        // Match from ID to the last "};" before the next block or end of section
+        const blockStartPos = configSectionContent.indexOf(id);
+        if (blockStartPos !== -1) {
+          // Find the next block start or end of section
+          const nextBlockMatch = configSectionContent
+            .substring(blockStartPos)
+            .match(/\n\t\t\w{24} \/\*|$/);
+          if (nextBlockMatch) {
+            const potentialBlockEndPos = blockStartPos + nextBlockMatch.index;
+            const potentialBlock = configSectionContent.substring(
+              blockStartPos,
+              potentialBlockEndPos
+            );
+            // Find the last "};" in this potential block that matches our block structure
+            // Need to find the "};" that closes our specific block, not just any "};"
+            let blockBraceCount = 1;
+            let blockPos = "= {".length;
+            let blockEndPos = -1;
+
+            // Find the matching closing brace for our block
+            while (blockPos < potentialBlock.length && blockEndPos === -1) {
+              const char = potentialBlock[blockPos];
+              if (char === "{") blockBraceCount++;
+              if (char === "}") {
+                blockBraceCount--;
+                if (blockBraceCount === 0) {
+                  // Found the closing brace for our block
+                  if (
+                    blockPos + 1 < potentialBlock.length &&
+                    potentialBlock[blockPos + 1] === ";"
+                  ) {
+                    blockEndPos = blockPos + 2; // +2 for "};"
+                  }
+                }
+              }
+              blockPos++;
+            }
+
+            if (blockEndPos !== -1) {
+              const block = potentialBlock.substring(0, blockEndPos);
+              // Check if block contains invalid "Swift" field (without VERSION)
+              if (block.match(/^\s*Swift\s*=/m)) {
+                console.log(
+                  chalk.yellow(
+                    `⚠️  Found invalid "Swift" field in fallback-extracted block ${id}, will be removed during cleanup`
+                  )
+                );
+              }
+              configBlocks[id] = block;
+              foundEnd = true;
+            }
+          }
+        }
+
+        // Final fallback: use non-greedy regex
+        if (!foundEnd) {
+          const blockRegex = new RegExp(
+            `${idPattern} /\\* .*? \\*/ = \\{[\\s\\S]*?\\};`,
+            "m"
+          );
+          const fallbackBlock = configSectionContent.match(blockRegex);
+          if (fallbackBlock) {
+            configBlocks[id] = fallbackBlock[0];
+            foundEnd = true;
+          }
+        }
+      }
+    } else {
+      // Fallback: search in full content
+      const blockRegex = new RegExp(
+        `${idPattern} /\\* .*? \\*/ = \\{[\\s\\S]*?\\};`,
+        "m"
+      );
+      const fallbackBlock = content.match(blockRegex);
+      if (fallbackBlock) configBlocks[id] = fallbackBlock[0];
+    }
+  }
+
+  // Validate extracted blocks - ensure they have balanced braces and no duplicate fields
+  for (const id of Object.keys(configBlocks)) {
+    let block = configBlocks[id];
+    const openBraces = (block.match(/\{/g) || []).length;
+    const closeBraces = (block.match(/\}/g) || []).length;
+    if (openBraces !== closeBraces) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Config block ${id} has mismatched braces: ${openBraces} open, ${closeBraces} close`
+        )
+      );
+      // Try to fix by finding the correct end
+      const blockStart = block.indexOf("= {");
+      if (blockStart !== -1) {
+        let braceCount = 1; // Start at 1 because we're already inside the opening brace
+        let pos = blockStart + 3; // After "= {"
+        let foundEnd = false;
+
+        while (pos < block.length && !foundEnd) {
+          const char = block[pos];
+          if (char === "{") braceCount++;
+          if (char === "}") {
+            braceCount--;
+            if (braceCount === 0) {
+              // Found the closing brace
+              // Check if next character is semicolon
+              if (pos + 1 < block.length && block[pos + 1] === ";") {
+                block = block.substring(0, pos + 2); // +2 for "};"
+                configBlocks[id] = block;
+                foundEnd = true;
+              }
+            }
+          }
+          pos++;
+        }
+      }
+    }
+    // Ensure block ends with "};"
+    if (!block.trim().endsWith("};")) {
+      block = block.trim() + "};";
+      configBlocks[id] = block;
+    }
+
+    // Check for duplicate fields in buildSettings and remove them
+    // Need to properly extract buildSettings with nested braces
+    const buildSettingsStart = block.indexOf("buildSettings = {");
+    if (buildSettingsStart !== -1) {
+      let braceCount = 1;
+      let pos = buildSettingsStart + "buildSettings = {".length;
+      let buildSettingsEnd = -1;
+
+      // Find the matching closing brace for buildSettings
+      while (pos < block.length && buildSettingsEnd === -1) {
+        const char = block[pos];
+        if (char === "{") braceCount++;
+        if (char === "}") {
+          braceCount--;
+          if (braceCount === 0) {
+            buildSettingsEnd = pos;
+          }
+        }
+        pos++;
+      }
+
+      if (buildSettingsEnd !== -1) {
+        const buildSettings = block.substring(
+          buildSettingsStart + "buildSettings = {".length,
+          buildSettingsEnd
+        );
+        const fieldNames = new Set();
+        const lines = buildSettings.split("\n");
+        const cleanedLines = [];
+
+        for (const line of lines) {
+          // Match field name (e.g., "SWIFT_VERSION", "PRODUCT_NAME", etc.)
+          // Also check for "Swift" without "VERSION" - this is invalid
+          const fieldMatch = line.match(/^\s*([A-Z_][A-Z0-9_]*|Swift)\s*=/);
+          if (fieldMatch) {
+            const fieldName = fieldMatch[1];
+            // Skip "Swift" without "VERSION" - this is invalid
+            if (fieldName === "Swift" && !line.includes("SWIFT_VERSION")) {
+              console.log(
+                chalk.yellow(
+                  `⚠️  Removing invalid "Swift" field (without VERSION) in block ${id}`
+                )
+              );
+              continue;
+            }
+            if (fieldNames.has(fieldName)) {
+              // Skip duplicate field - keep only the first occurrence
+              console.log(
+                chalk.yellow(
+                  `⚠️  Removing duplicate field in block ${id}: ${fieldName}`
+                )
+              );
+              continue;
+            }
+            fieldNames.add(fieldName);
+          }
+          cleanedLines.push(line);
+        }
+
+        // Reconstruct block with cleaned buildSettings
+        const cleanedBuildSettings = cleanedLines.join("\n");
+        const beforeBuildSettings = block.substring(
+          0,
+          buildSettingsStart + "buildSettings = {".length
+        );
+        const afterBuildSettings = block.substring(buildSettingsEnd);
+        block = beforeBuildSettings + cleanedBuildSettings + afterBuildSettings;
+        configBlocks[id] = block;
+      }
+    }
+  }
+
+  const baseConfigIds = Object.keys(configBlocks);
+  if (baseConfigIds.length === 0) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Could not find any config blocks for IDs: ${configIds.join(", ")}`
+      )
+    );
+    return null;
+  }
+
+  const debugBase =
+    baseConfigIds.length >= 1 ? configBlocks[baseConfigIds[0]] : null;
+  const releaseBase =
+    baseConfigIds.length > 1 ? configBlocks[baseConfigIds[1]] : debugBase;
+  if (!debugBase || !releaseBase) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Could not find debug/release config blocks. Found ${baseConfigIds.length} blocks.`
+      )
+    );
+    return null;
+  }
+
+  console.log(chalk.cyan(`Found base target: ${baseName} (${baseTargetId})`));
+  console.log(chalk.cyan(`Creating ${envs.length} environment targets...`));
+
+  const buildableRefs = {
+    base: {
+      id: baseTargetId,
+      name: baseName,
+      productName: baseProductName,
+      ref: `<BuildableReference\n               BuildableIdentifier = "primary"\n               BlueprintIdentifier = "${baseTargetId}"\n               BuildableName = "${baseProductName}.app"\n               BlueprintName = "${baseName}"\n               ReferencedContainer = "container:${projectName}.xcodeproj">\n            </BuildableReference>`,
+    },
+    envs: {},
+  };
+
+  const baseBuildPhasesMatch = targetBlock.match(/buildPhases = \([\s\S]*?\);/);
+  const buildPhasesBlock = baseBuildPhasesMatch ? baseBuildPhasesMatch[0] : "";
+
+  for (const env of envs) {
+    console.log(chalk.cyan(`  Creating target for ${env}...`));
+    const capEnv = capitalize(env);
+    const targetName = `${projectName}${capEnv}`;
+    const productName = `${projectName}${capEnv}`;
+
+    const newProductRefId = genId();
+    const newTargetId = genId();
+    const newConfigListId = genId();
+    const newDebugConfigId = genId();
+    const newReleaseConfigId = genId();
+
+    // File reference - format exactly like original
+    let newProductRef = productRefBlockMatch[0]
+      .replace(baseProductRefId, newProductRefId)
+      .replace(/\/\* .*?\.app \*\//g, `/* ${productName}.app */`)
+      .replace(/path = .*?\.app;/, `path = ${productName}.app;`)
+      .replace(/name = .*?\.app;/, `name = ${productName}.app;`);
+
+    // Ensure it ends with semicolon and newline (preserve original format)
+    newProductRef = newProductRef.trim();
+    if (!newProductRef.endsWith(";")) {
+      newProductRef += ";";
+    }
+    newProductRef += "\n";
+
+    // Insert before the end marker - find last entry and insert after it
+    const lastEntryMatch = fileRefSection.match(
+      /(\t\t\w{24}[^\n]*;\n)(?=\/\* End PBXFileReference section \*\/)/
+    );
+    if (lastEntryMatch) {
+      fileRefSection = fileRefSection.replace(
+        lastEntryMatch[0],
+        `${lastEntryMatch[1]}\t\t${newProductRef}`
+      );
+    } else {
+      fileRefSection = fileRefSection.replace(
+        "/* End PBXFileReference section */",
+        `\t\t${newProductRef}/* End PBXFileReference section */`
+      );
+    }
+
+    // Build configurations
+    const plistName = `${projectName} ${env}-Info.plist`;
+    let debugCfg = cloneBuildConfigBlock(
+      debugBase,
+      newDebugConfigId,
+      `${targetName} Debug`,
+      plistName
+    );
+    // Replace PRODUCT_NAME more precisely - only match PRODUCT_NAME field, not other fields
+    debugCfg = debugCfg.replace(
+      /PRODUCT_NAME = [^;]+;/,
+      `PRODUCT_NAME = ${targetName};`
+    );
+
+    let releaseCfg = cloneBuildConfigBlock(
+      releaseBase,
+      newReleaseConfigId,
+      `${targetName} Release`,
+      plistName
+    );
+    // Replace PRODUCT_NAME more precisely - only match PRODUCT_NAME field, not other fields
+    releaseCfg = releaseCfg.replace(
+      /PRODUCT_NAME = [^;]+;/,
+      `PRODUCT_NAME = ${targetName};`
+    );
+
+    // Preserve original formatting - blocks should already have correct tabs from cloneBuildConfigBlock
+    // XCBuildConfiguration blocks end with "};" on a new line
+    // Validate and fix block structure after replacements
+
+    // Ensure blocks end properly - they should end with "};" and newline
+    const debugCfgTrimmed = debugCfg.trim();
+    if (!debugCfgTrimmed.endsWith("};")) {
+      console.log(
+        chalk.yellow(`⚠️  Debug config block doesn't end with "};", fixing...`)
+      );
+      // Try to fix - find the last "};" or add it
+      const lastBrace = debugCfgTrimmed.lastIndexOf("}");
+      if (
+        lastBrace !== -1 &&
+        lastBrace + 1 < debugCfgTrimmed.length &&
+        debugCfgTrimmed[lastBrace + 1] !== ";"
+      ) {
+        debugCfg = debugCfgTrimmed.substring(0, lastBrace + 1) + ";\n";
+      } else if (!debugCfgTrimmed.endsWith("}")) {
+        debugCfg = debugCfgTrimmed + "};\n";
+      } else {
+        debugCfg = debugCfgTrimmed + ";\n";
+      }
+    } else if (!debugCfg.endsWith("\n")) {
+      debugCfg = debugCfgTrimmed + "\n";
+    }
+
+    // Validate block structure - check brace balance
+    const debugOpen = (debugCfg.match(/\{/g) || []).length;
+    const debugClose = (debugCfg.match(/\}/g) || []).length;
+    if (debugOpen !== debugClose) {
+      console.log(
+        chalk.red(
+          `❌ Debug config block brace mismatch: ${debugOpen} open, ${debugClose} close - BLOCK WILL BE SKIPPED`
+        )
+      );
+      // Skip this block to prevent corruption
+      continue;
+    }
+
+    const releaseCfgTrimmed = releaseCfg.trim();
+    if (!releaseCfgTrimmed.endsWith("};")) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Release config block doesn't end with "};", fixing...`
+        )
+      );
+      // Try to fix - find the last "};" or add it
+      const lastBrace = releaseCfgTrimmed.lastIndexOf("}");
+      if (
+        lastBrace !== -1 &&
+        lastBrace + 1 < releaseCfgTrimmed.length &&
+        releaseCfgTrimmed[lastBrace + 1] !== ";"
+      ) {
+        releaseCfg = releaseCfgTrimmed.substring(0, lastBrace + 1) + ";\n";
+      } else if (!releaseCfgTrimmed.endsWith("}")) {
+        releaseCfg = releaseCfgTrimmed + "};\n";
+      } else {
+        releaseCfg = releaseCfgTrimmed + ";\n";
+      }
+    } else if (!releaseCfg.endsWith("\n")) {
+      releaseCfg = releaseCfgTrimmed + "\n";
+    }
+
+    // Validate block structure - check brace balance
+    const releaseOpen = (releaseCfg.match(/\{/g) || []).length;
+    const releaseClose = (releaseCfg.match(/\}/g) || []).length;
+    if (releaseOpen !== releaseClose) {
+      console.log(
+        chalk.red(
+          `❌ Release config block brace mismatch: ${releaseOpen} open, ${releaseClose} close - BLOCK WILL BE SKIPPED`
+        )
+      );
+      // Skip this block to prevent corruption
+      continue;
+    }
+
+    // Insert before the end marker
+    // XCBuildConfiguration blocks are multiline and end with "};"
+    // Simply insert before the end marker to preserve structure
+    configSection = configSection.replace(
+      "/* End XCBuildConfiguration section */",
+      `${debugCfg}${releaseCfg}/* End XCBuildConfiguration section */`
+    );
+
+    let newConfigList = `\t\t${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */ = {\n\t\t\tisa = XCConfigurationList;\n\t\t\tbuildConfigurations = (\n\t\t\t\t${newDebugConfigId} /* ${targetName} Debug */,\n\t\t\t\t${newReleaseConfigId} /* ${targetName} Release */,\n\t\t\t);\n\t\t\tdefaultConfigurationIsVisible = 0;\n\t\t\tdefaultConfigurationName = Release;\n\t\t};`;
+
+    // Ensure config list ends properly
+    newConfigList = newConfigList.trim();
+    if (!newConfigList.endsWith(";")) {
+      newConfigList += ";";
+    }
+    newConfigList += "\n";
+
+    // Insert before the end marker - find last complete block and insert after it
+    // XCConfigurationList blocks are multiline and end with "};"
+    const lastConfigListBlockMatch = configListSection.match(
+      /(\t\t\w{24}[^}]*\};\n)(?=\/\* End XCConfigurationList section \*\/)/
+    );
+    if (lastConfigListBlockMatch) {
+      configListSection = configListSection.replace(
+        lastConfigListBlockMatch[0],
+        `${lastConfigListBlockMatch[1]}${newConfigList}`
+      );
+    } else {
+      configListSection = configListSection.replace(
+        "/* End XCConfigurationList section */",
+        `${newConfigList}/* End XCConfigurationList section */`
+      );
+    }
+
+    // Native target - replace specific fields to avoid double replacement
+    // First replace IDs
+    let newTarget = targetBlock
+      .replace(new RegExp(`${baseTargetId}`, "g"), newTargetId)
+      .replace(new RegExp(`${baseProductRefId}`, "g"), newProductRefId)
+      .replace(new RegExp(`${baseConfigListId}`, "g"), newConfigListId);
+
+    // Then replace names in specific places (avoiding global replace)
+    newTarget = newTarget.replace(
+      new RegExp(`name = ${baseName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")};`),
+      `name = ${targetName};`
+    );
+    newTarget = newTarget.replace(
+      new RegExp(
+        `productName = ${baseProductName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )};`
+      ),
+      `productName = ${productName};`
+    );
+
+    // Replace in comment at the start of target block
+    newTarget = newTarget.replace(
+      new RegExp(
+        `${newTargetId} /\\* ${baseName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )} \\*/`
+      ),
+      `${newTargetId} /* ${targetName} */`
+    );
+    newTarget = newTarget.replace(
+      /productType = .*?;/,
+      'productType = "com.apple.product-type.application";'
+    );
+    newTarget = newTarget.replace(
+      new RegExp(`productReference = ${newProductRefId} /\\* .*?\\.app \\*/;`),
+      `productReference = ${newProductRefId} /* ${productName}.app */;`
+    );
+    // Replace buildPhases if we have the block, but be careful with multiline matching
+    if (buildPhasesBlock) {
+      // Find the buildPhases line and replace everything until the closing );
+      const buildPhasesRegex = /buildPhases = \([\s\S]*?\);/m;
+      if (buildPhasesRegex.test(newTarget)) {
+        newTarget = newTarget.replace(buildPhasesRegex, buildPhasesBlock);
+      }
+    }
+    // Preserve original formatting from targetBlock
+    // Ensure target block ends properly
+    newTarget = newTarget.trim();
+    if (!newTarget.endsWith(";")) {
+      newTarget += ";";
+    }
+    newTarget += "\n";
+
+    // Insert before the end marker - find last complete block and insert after it
+    // PBXNativeTarget blocks are multiline and end with "};"
+    const lastNativeBlockMatch = nativeSection.match(
+      /(\t\t\w{24}[^}]*\};\n)(?=\/\* End PBXNativeTarget section \*\/)/
+    );
+    if (lastNativeBlockMatch) {
+      nativeSection = nativeSection.replace(
+        lastNativeBlockMatch[0],
+        `${lastNativeBlockMatch[1]}${newTarget}`
+      );
+    } else {
+      nativeSection = nativeSection.replace(
+        "/* End PBXNativeTarget section */",
+        `${newTarget}/* End PBXNativeTarget section */`
+      );
+    }
+
+    buildableRefs.envs[env] = {
+      id: newTargetId,
+      name: targetName,
+      productName,
+      ref: `<BuildableReference\n               BuildableIdentifier = "primary"\n               BlueprintIdentifier = "${newTargetId}"\n               BuildableName = "${productName}.app"\n               BlueprintName = "${targetName}"\n               ReferencedContainer = "container:${projectName}.xcodeproj">\n            </BuildableReference>`,
+    };
+
+    // Products children
+    productsChildren += `\n\t\t\t\t${newProductRefId} /* ${productName}.app */,`;
+
+    // Project targets list
+    projectTargets += `\n\t\t\t${newTargetId} /* ${targetName} */,`;
+
+    // Add to TargetAttributes
+    targetAttributes += `\n\t\t\t${newTargetId} = {\n\t\t\t\tLastSwiftMigration = 1120;\n\t\t\t};`;
+  }
+
+  // Reassemble content
+  if (productsMatch) {
+    const newProducts = productsMatch[0].replace(
+      productsMatch[1],
+      productsChildren
+    );
+    content = content.replace(productsGroupRegex, newProducts);
+  }
+  if (projectTargetsMatch) {
+    const newTargetsBlock = projectTargetsMatch[0].replace(
+      projectTargetsMatch[1],
+      projectTargets
+    );
+    content = content.replace(projectTargetsRegex, newTargetsBlock);
+  }
+
+  // Update TargetAttributes
+  if (targetAttributesMatch && targetAttributes) {
+    const newTargetAttributes = targetAttributesMatch[0].replace(
+      targetAttributesMatch[1],
+      targetAttributes
+    );
+    content = content.replace(targetAttributesRegex, newTargetAttributes);
+  }
+
+  content = content.replace(fileRefSectionRe, fileRefSection);
+  content = content.replace(nativeSectionRe, nativeSection);
+  content = content.replace(configListSectionRe, configListSection);
+  content = content.replace(configSectionRe, configSection);
+
+  // Validate that all blocks are properly closed
+  const openBraces = (content.match(/\{/g) || []).length;
+  const closeBraces = (content.match(/\}/g) || []).length;
+  if (openBraces !== closeBraces) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Warning: Mismatched braces in project.pbxproj (${openBraces} open, ${closeBraces} close)`
+      )
+    );
+
+    // Try to find where the mismatch occurs by checking each section
+    const sections = [
+      { name: "PBXFileReference", content: fileRefSection },
+      { name: "PBXNativeTarget", content: nativeSection },
+      { name: "XCBuildConfiguration", content: configSection },
+      { name: "XCConfigurationList", content: configListSection },
+    ];
+
+    for (const section of sections) {
+      const sectionOpen = (section.content.match(/\{/g) || []).length;
+      const sectionClose = (section.content.match(/\}/g) || []).length;
+      if (sectionOpen !== sectionClose) {
+        console.log(
+          chalk.yellow(
+            `  ⚠️  Mismatch in ${section.name} section: ${sectionOpen} open, ${sectionClose} close`
+          )
+        );
+      }
+    }
+  }
+
+  // Check for common syntax errors - missing semicolons after key-value pairs
+  // Look for patterns like "ID" = { ... } without semicolon before closing brace of parent
+  const missingSemicolonPattern = /(\w{24}\s*=\s*\{[^}]*\}\s*)(?!;)/g;
+  const missingSemicolonMatches = content.match(missingSemicolonPattern);
+  if (missingSemicolonMatches && missingSemicolonMatches.length > 0) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Warning: Found ${missingSemicolonMatches.length} potential missing semicolons in project.pbxproj`
+      )
+    );
+  }
+
+  // Add SWIFT_VERSION to project-level configurations (Debug and Release for PBXProject)
+  // Project-level configs have name = Debug; or name = Release; (without target name prefix)
+  // Find all config blocks and check if they are project-level (name doesn't contain target name)
+  const configBlockRegex =
+    /(\w{24}\s*\/\*\s*([^*]+)\s*\*\/\s*=\s*\{[\s\S]*?buildSettings\s*=\s*\{)([\s\S]*?)(\};[\s\S]*?name\s*=\s*([^;]+);[\s\S]*?\};)/g;
+  content = content.replace(
+    configBlockRegex,
+    (
+      match,
+      beforeBuildSettings,
+      commentName,
+      buildSettings,
+      afterBuildSettings,
+      nameValue
+    ) => {
+      // Check if this is a project-level config (name is exactly "Debug" or "Release" without target name)
+      // Remove quotes if present and trim
+      const cleanName = nameValue.replace(/^["']|["']$/g, "").trim();
+      const isProjectConfig =
+        (cleanName === "Debug" || cleanName === "Release") &&
+        !commentName.includes(projectName) &&
+        !nameValue.includes(projectName);
+
+      if (isProjectConfig && !buildSettings.includes("SWIFT_VERSION")) {
+        // For Debug: add after SWIFT_ACTIVE_COMPILATION_CONDITIONS, before USE_HERMES
+        if (cleanName === "Debug") {
+          if (buildSettings.includes("SWIFT_ACTIVE_COMPILATION_CONDITIONS")) {
+            buildSettings = buildSettings.replace(
+              /(SWIFT_ACTIVE_COMPILATION_CONDITIONS\s*=\s*"[^"]+";\n)/,
+              "$1\t\t\t\tSWIFT_VERSION = 5.0;\n"
+            );
+          } else if (buildSettings.includes("USE_HERMES")) {
+            buildSettings = buildSettings.replace(
+              /(USE_HERMES\s*=\s*[^;]+;\n)/,
+              "\t\t\t\tSWIFT_VERSION = 5.0;\n$1"
+            );
+          } else {
+            // Fallback: add before closing brace
+            buildSettings = buildSettings.replace(
+              /(\n\t\t\t\};)/,
+              "\n\t\t\t\tSWIFT_VERSION = 5.0;$1"
+            );
+          }
+        }
+        // For Release: add after SDKROOT, before USE_HERMES
+        else if (cleanName === "Release") {
+          if (buildSettings.includes("SDKROOT")) {
+            buildSettings = buildSettings.replace(
+              /(SDKROOT\s*=\s*[^;]+;\n)/,
+              "$1\t\t\t\tSWIFT_VERSION = 5.0;\n"
+            );
+          } else if (buildSettings.includes("USE_HERMES")) {
+            buildSettings = buildSettings.replace(
+              /(USE_HERMES\s*=\s*[^;]+;\n)/,
+              "\t\t\t\tSWIFT_VERSION = 5.0;\n$1"
+            );
+          } else {
+            // Fallback: add before closing brace
+            buildSettings = buildSettings.replace(
+              /(\n\t\t\t\};)/,
+              "\n\t\t\t\tSWIFT_VERSION = 5.0;$1"
+            );
+          }
+        }
+        return beforeBuildSettings + buildSettings + afterBuildSettings;
+      }
+      return match;
+    }
+  );
+
+  console.log(chalk.green("✅ iOS targets created successfully"));
+  await fs.writeFile(pbxprojPath, content, "utf8");
+  return buildableRefs;
+}
 async function copySplashScreenImages(
   splashScreenDir,
   projectPath,
@@ -439,6 +1684,7 @@ async function createApp(config) {
     autoYes,
     splashScreenDir,
     appIconDir,
+    envSetupSelectedEnvs = [],
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
@@ -527,22 +1773,12 @@ async function createApp(config) {
       }
     }
 
-    // Add package attribute to AndroidManifest.xml
+    // Ensure package attribute on AndroidManifest.xml
     const androidManifestPath = path.join(
       projectPath,
       "android/app/src/main/AndroidManifest.xml"
     );
-    if (await fs.pathExists(androidManifestPath)) {
-      let manifestContent = await fs.readFile(androidManifestPath, "utf8");
-      // Add package attribute to manifest tag if it doesn't exist
-      if (!manifestContent.includes("package=")) {
-        manifestContent = manifestContent.replace(
-          /<manifest xmlns:android="http:\/\/schemas\.android\.com\/apk\/res\/android">/,
-          `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${bundleIdentifier}">`
-        );
-        await fs.writeFile(androidManifestPath, manifestContent, "utf8");
-      }
-    }
+    await ensureManifestPackage(androidManifestPath, bundleIdentifier);
 
     // Rename iOS folder
     const iosOldPath = path.join(projectPath, "ios/HelloWorld");
@@ -655,6 +1891,32 @@ async function createApp(config) {
         );
       }
       await fs.writeFile(stringsXmlPath, stringsContent, "utf8");
+    }
+
+    // Environment-specific setup (Android/iOS)
+    const selectedEnvs =
+      envSetupSelectedEnvs && envSetupSelectedEnvs.length >= 2
+        ? envSetupSelectedEnvs
+        : [];
+    if (selectedEnvs.length > 0) {
+      await copyAndroidEnvSources(selectedEnvs, projectPath, bundleIdentifier);
+      await updateAndroidBuildGradle(
+        selectedEnvs,
+        projectPath,
+        bundleIdentifier
+      );
+      await updatePodfileForEnvs(selectedEnvs, projectPath, projectName);
+      const buildableRefs = await createIosTargetsForEnvs(
+        selectedEnvs,
+        projectPath,
+        projectName
+      );
+      await createIosEnvSchemes(
+        selectedEnvs,
+        projectPath,
+        projectName,
+        buildableRefs || {}
+      );
     }
 
     replaceSpinner.succeed("Placeholders replaced");

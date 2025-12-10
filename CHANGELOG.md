@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Environment setup flow: interactive selection of environments (local/development/staging/production) with minimum two selection validation and Cancel option.
+- Automatic Android flavor generation and envConfig mapping per selected environments; copies `src/main` assets/res into `src/<env>` (excluding Kotlin).
+- iOS shared schemes per selected environment (`<AppName><Env>`) with pre-actions copying `.env.<env>` to `.env`.
 - Splash screen images support: interactive prompt to specify directory with splash screen images
 - Automatic detection and copying of splash screen images for both iOS and Android
 - Support for structured directory format (ios/ and android/ subdirectories, like appicon.co exports)

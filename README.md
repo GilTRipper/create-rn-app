@@ -67,6 +67,15 @@ npx @giltripper/create-rn-app MyApp \
 - `--splash-screen-dir <path>` - Path to directory with splash screen images (optional)
 - `--app-icon-dir <path>` - Path to directory with app icons from appicon.co (optional)
 
+### Environment setup
+
+After dependency prompt, you can opt into environment configuration:
+
+- Choose any of: `local`, `development`, `staging`, `production` (select at least two or pick Cancel to skip).
+- `.env.<env>` files are expected; pre-actions copy the chosen one to `.env` for iOS schemes.
+- Android: flavors are generated for the selected envs with matching `project.ext.envConfigFiles` and per-env `src/<env>` folders (assets/res copied from `main`, Kotlin stays in `main/java`).
+- iOS: shared schemes named `<AppName><Env>` with pre-actions copying the corresponding `.env.<env>` file.
+
 ### Splash Screen
 
 During project creation, you'll be prompted to provide a path to a directory containing splash screen images. This is optional - you can press Enter to skip and use default blank white splash screens.
