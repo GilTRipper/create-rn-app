@@ -8,16 +8,38 @@ const { replaceInFile } = require("./utils");
 const capitalize = str => str.charAt(0).toUpperCase() + str.slice(1);
 
 async function ensureManifestPackage(manifestPath, bundleIdentifier) {
-  if (!(await fs.pathExists(manifestPath))) return;
+  if (!(await fs.pathExists(manifestPath))) {
+    console.log(
+      chalk.yellow(`⚠️  AndroidManifest.xml does not exist: ${manifestPath}`)
+    );
+    return;
+  }
 
   let manifestContent = await fs.readFile(manifestPath, "utf8");
-  if (!manifestContent.includes("package=")) {
-    manifestContent = manifestContent.replace(
-      /<manifest\s+xmlns:android="http:\/\/schemas\.android\.com\/apk\/res\/android">/,
-      `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${bundleIdentifier}">`
-    );
-    await fs.writeFile(manifestPath, manifestContent, "utf8");
+
+  // Check if package attribute already exists
+  if (manifestContent.includes(`package="${bundleIdentifier}"`)) {
+    // Already has correct package
+    return;
   }
+
+  // Check if package attribute exists but with different value
+  const packageRegex = /package="[^"]+"/;
+  if (packageRegex.test(manifestContent)) {
+    // Replace existing package
+    manifestContent = manifestContent.replace(
+      packageRegex,
+      `package="${bundleIdentifier}"`
+    );
+  } else {
+    // Add package attribute to manifest tag
+    manifestContent = manifestContent.replace(
+      /<manifest\s+xmlns:android="http:\/\/schemas\.android\.com\/apk\/res\/android"([^>]*)>/,
+      `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${bundleIdentifier}"$1>`
+    );
+  }
+
+  await fs.writeFile(manifestPath, manifestContent, "utf8");
 }
 
 async function copyAndroidEnvSources(
@@ -28,14 +50,41 @@ async function copyAndroidEnvSources(
   if (!selectedEnvs || selectedEnvs.length < 1) return;
 
   const mainSrcPath = path.join(projectPath, "android/app/src/main");
+  if (!(await fs.pathExists(mainSrcPath))) {
+    console.log(
+      chalk.yellow(`⚠️  Main source path does not exist: ${mainSrcPath}`)
+    );
+    return;
+  }
+
   for (const env of selectedEnvs) {
+    // Skip production - it doesn't need a source directory, only flavor in build.gradle
+    if (env.toLowerCase() === "production") {
+      continue;
+    }
+
     const envDir = path.join(projectPath, `android/app/src/${env}`);
     await fs.ensureDir(envDir);
-    await fs.copy(mainSrcPath, envDir, {
-      overwrite: true,
-      filter: src =>
-        !src.includes(`${path.sep}java${path.sep}`) && !src.endsWith(".kt"),
-    });
+
+    // Copy all files except .kt files
+    // Walk through the directory and copy files individually
+    const copyRecursive = async (src, dest) => {
+      const stat = await fs.stat(src);
+      if (stat.isDirectory()) {
+        await fs.ensureDir(dest);
+        const entries = await fs.readdir(src);
+        for (const entry of entries) {
+          await copyRecursive(path.join(src, entry), path.join(dest, entry));
+        }
+      } else {
+        // Skip .kt files
+        if (!src.endsWith(".kt")) {
+          await fs.copy(src, dest, { overwrite: true });
+        }
+      }
+    };
+
+    await copyRecursive(mainSrcPath, envDir);
 
     const envManifest = path.join(envDir, "AndroidManifest.xml");
     await ensureManifestPackage(envManifest, bundleIdentifier);
@@ -43,20 +92,35 @@ async function copyAndroidEnvSources(
 }
 
 function buildEnvConfigFilesBlock(selectedEnvs) {
-  const lines = selectedEnvs
-    .map(env => {
-      const lower = env.toLowerCase();
-      return [
-        `  ${lower}debug: ".env.${lower}",`,
-        `  ${lower}release: ".env.${lower}",`,
-      ].join("\n");
-    })
-    .join("\n");
-  return `project.ext.envConfigFiles = [\n${lines}\n]`;
+  // Always include production for Android (even if not selected)
+  const envsForConfig = [...selectedEnvs];
+  if (!envsForConfig.some(env => env.toLowerCase() === "production")) {
+    envsForConfig.push("production");
+  }
+
+  const allLines = [];
+  envsForConfig.forEach((env, index) => {
+    const lower = env.toLowerCase();
+    const isLast = index === envsForConfig.length - 1;
+    allLines.push(`    ${lower}debug: ".env.${lower}",`);
+    // Last release line should not have comma
+    if (isLast) {
+      allLines.push(`    ${lower}release: ".env.${lower}"`);
+    } else {
+      allLines.push(`    ${lower}release: ".env.${lower}",`);
+    }
+  });
+  return `project.ext.envConfigFiles = [\n${allLines.join("\n")}\n]`;
 }
 
 function buildProductFlavorsBlock(selectedEnvs, bundleIdentifier) {
-  const flavors = selectedEnvs
+  // Always include production for Android (even if not selected)
+  const envsForFlavors = [...selectedEnvs];
+  if (!envsForFlavors.some(env => env.toLowerCase() === "production")) {
+    envsForFlavors.push("production");
+  }
+
+  const flavors = envsForFlavors
     .map(env => {
       const lower = env.toLowerCase();
       return `        ${lower} {\n            dimension "default"\n            applicationId "${bundleIdentifier}"\n            resValue "string", "build_config_package", "${bundleIdentifier}"\n        }`;
@@ -74,34 +138,95 @@ async function updateAndroidBuildGradle(
   if (!selectedEnvs || selectedEnvs.length < 1) return;
 
   const buildGradlePath = path.join(projectPath, "android/app/build.gradle");
-  if (!(await fs.pathExists(buildGradlePath))) return;
+  if (!(await fs.pathExists(buildGradlePath))) {
+    console.log(
+      chalk.yellow(`⚠️  build.gradle does not exist: ${buildGradlePath}`)
+    );
+    return;
+  }
 
   let content = await fs.readFile(buildGradlePath, "utf8");
 
+  // Add or update envConfigFiles block
   const envBlock = buildEnvConfigFilesBlock(selectedEnvs);
+  // Match the entire envConfigFiles block including newlines
   const envRegex = /project\.ext\.envConfigFiles\s*=\s*\[[\s\S]*?\]/m;
   if (envRegex.test(content)) {
+    // Update existing block - replace the entire block
     content = content.replace(envRegex, envBlock);
   } else {
-    content = content.replace(
-      /apply from: .*dotenv\.gradle\n/,
-      match => `${match}${envBlock}\n`
-    );
+    // Add new block - try to find apply from dotenv.gradle first
+    const dotenvRegex =
+      /(apply from: project\(':react-native-config'\)\.projectDir\.getPath\(\) \+ "\/dotenv\.gradle")/;
+    if (dotenvRegex.test(content)) {
+      // Add after the dotenv.gradle line with proper newline
+      content = content.replace(dotenvRegex, `$1\n${envBlock}`);
+    } else {
+      // Try to find any apply from dotenv
+      const dotenvSimpleRegex = /(apply from: .*dotenv\.gradle)/;
+      if (dotenvSimpleRegex.test(content)) {
+        content = content.replace(dotenvSimpleRegex, `$1\n${envBlock}`);
+      } else {
+        // Add at the top of the file after any apply statements
+        const applyRegex = /(apply plugin:.*\n)/;
+        if (applyRegex.test(content)) {
+          content = content.replace(applyRegex, `$1${envBlock}\n`);
+        } else {
+          // Add at the beginning
+          content = `${envBlock}\n${content}`;
+        }
+      }
+    }
   }
 
+  // Add or update productFlavors block
   const flavorsBlock = buildProductFlavorsBlock(selectedEnvs, bundleIdentifier);
   const productFlavorsRegex =
     /flavorDimensions[\s\S]*?productFlavors\s*\{[\s\S]*?\}/m;
   if (productFlavorsRegex.test(content)) {
+    // Update existing block
     content = content.replace(productFlavorsRegex, flavorsBlock);
   } else {
+    // Add new block - find android block and add after defaultConfig
     const androidBlockRegex =
-      /android\s*\{[\s\S]*?defaultConfig\s*\{[\s\S]*?\}/m;
+      /(android\s*\{[\s\S]*?defaultConfig\s*\{[\s\S]*?\}\s*)/m;
     if (androidBlockRegex.test(content)) {
       content = content.replace(
         androidBlockRegex,
-        match => `${match}\n${flavorsBlock}\n`
+        match => `${match}\n    ${flavorsBlock}\n`
       );
+    } else {
+      // Try to find android block without defaultConfig
+      const androidSimpleRegex = /(android\s*\{)/m;
+      if (androidSimpleRegex.test(content)) {
+        content = content.replace(
+          androidSimpleRegex,
+          match => `${match}\n    ${flavorsBlock}\n`
+        );
+      } else {
+        console.log(
+          chalk.yellow(`⚠️  Could not find android block in build.gradle`)
+        );
+      }
+    }
+  }
+
+  // Validate that envConfigFiles block is properly formatted
+  const validationRegex = /project\.ext\.envConfigFiles\s*=\s*\[[\s\S]*?\]/m;
+  const match = content.match(validationRegex);
+  if (match) {
+    const block = match[0];
+    // Check for common issues
+    if (block.includes(']"') || block.match(/\]\s*"/)) {
+      console.log(
+        chalk.yellow(
+          "⚠️  Warning: Found potential quote issue in envConfigFiles block"
+        )
+      );
+    }
+    // Ensure block ends with ] and not ]"
+    if (block.trim().endsWith(']"')) {
+      content = content.replace(block, block.replace(/\]\s*"$/, "]"));
     }
   }
 
@@ -1697,14 +1822,31 @@ async function createApp(config) {
       filter: src => {
         // Skip node_modules, build folders, etc.
         const relativePath = path.relative(templatePath, src);
-        return (
-          !relativePath.includes("node_modules") &&
-          !relativePath.includes(".git") &&
-          !relativePath.includes("build") &&
-          !relativePath.includes("Pods") &&
-          !relativePath.includes("android/app/build") &&
-          !relativePath.includes("ios/build")
-        );
+        const normalizedPath = relativePath.replace(/\\/g, "/");
+
+        // Skip node_modules, .git, Pods
+        if (
+          normalizedPath.includes("node_modules") ||
+          normalizedPath.includes(".git") ||
+          normalizedPath.includes("Pods")
+        ) {
+          return false;
+        }
+
+        // Skip build directories (but allow build.gradle files)
+        // Pattern: /build/ or /build at end (directory), but not build.gradle (file)
+        const buildDirPattern = /\/build(\/|$)/;
+        if (buildDirPattern.test(normalizedPath)) {
+          // This is a build directory, skip it
+          return false;
+        }
+
+        // Allow build.gradle files
+        if (normalizedPath.endsWith("build.gradle")) {
+          return true;
+        }
+
+        return true;
       },
     });
 
@@ -1894,8 +2036,9 @@ async function createApp(config) {
     }
 
     // Environment-specific setup (Android/iOS)
+    // Create environments even if only one is selected
     const selectedEnvs =
-      envSetupSelectedEnvs && envSetupSelectedEnvs.length >= 2
+      envSetupSelectedEnvs && envSetupSelectedEnvs.length >= 1
         ? envSetupSelectedEnvs
         : [];
     if (selectedEnvs.length > 0) {

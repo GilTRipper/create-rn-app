@@ -19,10 +19,5 @@ buildscript {
     }
 }
 
-// allprojects {
-//     tasks.withType(Exec).configureEach {
-//         environment 'PATH', "/Users/ilyamazhuhin/.nvm/versions/node/v20.19.5/bin:${System.getenv('PATH')}"
-//     }
-// }
 
 apply plugin: "com.facebook.react.rootproject"
