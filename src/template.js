@@ -7,6 +7,15 @@ const { replaceInFile } = require("./utils");
 
 const capitalize = str => str.charAt(0).toUpperCase() + str.slice(1);
 
+// Get proper environment name for schemes/targets (staging -> Stg, development -> Development, etc.)
+function getEnvNameForScheme(env) {
+  const lower = env.toLowerCase();
+  if (lower === "staging") {
+    return "Stg";
+  }
+  return capitalize(env);
+}
+
 async function ensureManifestPackage(manifestPath, bundleIdentifier) {
   if (!(await fs.pathExists(manifestPath))) {
     console.log(
@@ -74,6 +83,10 @@ async function copyAndroidEnvSources(
         await fs.ensureDir(dest);
         const entries = await fs.readdir(src);
         for (const entry of entries) {
+          // Skip java directory (contains .kt files)
+          if (entry === "java") {
+            continue;
+          }
           await copyRecursive(path.join(src, entry), path.join(dest, entry));
         }
       } else {
@@ -344,7 +357,7 @@ async function createIosEnvSchemes(
   console.log(chalk.green(`  ✅ Production scheme updated`));
 
   for (const env of envsForSchemes) {
-    const schemeName = `${projectName}${capitalize(env)}`;
+    const schemeName = `${projectName}${getEnvNameForScheme(env)}`;
     console.log(
       chalk.blue(`  Creating scheme for ${env}: ${schemeName}.xcscheme`)
     );
@@ -393,7 +406,9 @@ async function updatePodfileForEnvs(selectedEnvs, projectPath, projectName) {
   const envsForTargets = selectedEnvs.filter(
     env => env.toLowerCase() !== "production"
   );
-  const targets = envsForTargets.map(env => `${projectName}${capitalize(env)}`);
+  const targets = envsForTargets.map(
+    env => `${projectName}${getEnvNameForScheme(env)}`
+  );
   const targetBlocks = targets
     .map(
       target => `  target '${target}' do
@@ -961,7 +976,7 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
 
   for (const env of envs) {
     console.log(chalk.cyan(`  Creating target for ${env}...`));
-    const capEnv = capitalize(env);
+    const capEnv = getEnvNameForScheme(env);
     const targetName = `${projectName}${capEnv}`;
     const productName = `${projectName}${capEnv}`;
 
@@ -1796,6 +1811,134 @@ async function copyAppIcons(appIconDir, projectPath, projectName) {
   }
 }
 
+async function createEnvFiles(selectedEnvs, projectPath) {
+  if (!selectedEnvs || selectedEnvs.length < 1) return;
+
+  // Always create production .env file
+  const allEnvs = [...selectedEnvs];
+  if (!allEnvs.some(env => env.toLowerCase() === "production")) {
+    allEnvs.push("production");
+  }
+
+  for (const env of allEnvs) {
+    // Create .env files in the root of the project (not in android/ios folders)
+    const envFile = path.join(projectPath, `.env.${env.toLowerCase()}`);
+    // Create empty .env file if it doesn't exist
+    if (!(await fs.pathExists(envFile))) {
+      await fs.writeFile(
+        envFile,
+        `# ${env.toUpperCase()} environment variables\n`,
+        "utf8"
+      );
+      console.log(chalk.green(`  ✅ Created ${path.basename(envFile)}`));
+    }
+  }
+}
+
+async function addScriptsToPackageJson(
+  selectedEnvs,
+  projectPath,
+  projectName,
+  bundleIdentifier
+) {
+  if (!selectedEnvs || selectedEnvs.length < 1) return;
+
+  const packageJsonPath = path.join(projectPath, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) return;
+
+  let packageJson = await fs.readFile(packageJsonPath, "utf8");
+  let packageData;
+  try {
+    packageData = JSON.parse(packageJson);
+  } catch (error) {
+    console.log(
+      chalk.yellow(`⚠️  Could not parse package.json: ${error.message}`)
+    );
+    return;
+  }
+
+  if (!packageData.scripts) {
+    packageData.scripts = {};
+  }
+
+  // Always include production for Android
+  const allEnvs = [...selectedEnvs];
+  if (!allEnvs.some(env => env.toLowerCase() === "production")) {
+    allEnvs.push("production");
+  }
+
+  const lowerProjectName = projectName.toLowerCase();
+  const capProjectName =
+    projectName.charAt(0).toUpperCase() + projectName.slice(1);
+
+  // Add Android scripts
+  for (const env of allEnvs) {
+    const lowerEnv = env.toLowerCase();
+    const capEnv = env.charAt(0).toUpperCase() + env.slice(1);
+    // Use short name for staging (stg)
+    const scriptEnv = lowerEnv === "staging" ? "stg" : lowerEnv;
+
+    // Debug scripts
+    if (lowerEnv === "production") {
+      packageData.scripts[
+        `android:prod`
+      ] = `react-native run-android --mode=productiondebug --appId=${bundleIdentifier}`;
+      packageData.scripts[
+        `android:prod-release`
+      ] = `react-native run-android --mode=productionrelease`;
+      packageData.scripts[
+        `android:build-prod`
+      ] = `cd android && ./gradlew app:assembleProductionRelease && cd ..`;
+      packageData.scripts[
+        `android:bundle`
+      ] = `cd android && ./gradlew clean && ./gradlew bundleProductionRelease && cd ..`;
+    } else {
+      packageData.scripts[
+        `android:${scriptEnv}`
+      ] = `react-native run-android --mode=${lowerEnv}debug --appId=${bundleIdentifier}.debug`;
+      packageData.scripts[
+        `android:${scriptEnv}-release`
+      ] = `react-native run-android --mode=${lowerEnv}release`;
+      packageData.scripts[
+        `android:build-${scriptEnv}`
+      ] = `cd android && ./gradlew app:assemble${capEnv}Release && cd ..`;
+    }
+  }
+
+  // Add general build script if development exists
+  if (allEnvs.some(env => env.toLowerCase() === "development")) {
+    packageData.scripts[
+      `android:build`
+    ] = `cd android && ./gradlew app:assembleDevelopmentRelease && cd ..`;
+  }
+
+  // Add iOS scripts
+  const envsForIos = selectedEnvs.filter(
+    env => env.toLowerCase() !== "production"
+  );
+  for (const env of envsForIos) {
+    const lowerEnv = env.toLowerCase();
+    // Use short name for staging (stg) in script name
+    const scriptEnv = lowerEnv === "staging" ? "stg" : lowerEnv;
+    const schemeName = `${projectName}${getEnvNameForScheme(env)}`;
+    packageData.scripts[
+      `ios:${scriptEnv}`
+    ] = `react-native run-ios --scheme '${schemeName}'`;
+  }
+
+  // Always add production iOS script
+  packageData.scripts[
+    `ios:prod`
+  ] = `react-native run-ios --scheme '${projectName}'`;
+
+  // Write updated package.json
+  await fs.writeFile(
+    packageJsonPath,
+    JSON.stringify(packageData, null, 2) + "\n",
+    "utf8"
+  );
+}
+
 async function createApp(config) {
   const {
     projectName,
@@ -2059,6 +2202,17 @@ async function createApp(config) {
         projectPath,
         projectName,
         buildableRefs || {}
+      );
+
+      // Create .env files for all environments
+      await createEnvFiles(selectedEnvs, projectPath);
+
+      // Add scripts to package.json
+      await addScriptsToPackageJson(
+        selectedEnvs,
+        projectPath,
+        projectName,
+        bundleIdentifier
       );
     }
 
