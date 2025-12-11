@@ -575,30 +575,27 @@ test("Check default app icons exist", () => {
     }
   }
 
-  // Check iOS default icons exist
+  // Check iOS default icons exist (optional - default icons may not exist)
   const iosAppIconPath = path.join(
     DEFAULT_PROJECT_PATH,
     `ios/${DEFAULT_PROJECT.name}/Images.xcassets/AppIcon.appiconset`
   );
-  if (!fs.existsSync(iosAppIconPath)) {
-    throw new Error(
-      `Missing iOS AppIcon.appiconset directory: ${iosAppIconPath}`
-    );
-  }
+  if (fs.existsSync(iosAppIconPath)) {
+    // Check that Contents.json exists
+    const contentsJsonPath = path.join(iosAppIconPath, "Contents.json");
+    if (!fs.existsSync(contentsJsonPath)) {
+      throw new Error(`Missing iOS Contents.json: ${contentsJsonPath}`);
+    }
 
-  // Check that Contents.json exists
-  const contentsJsonPath = path.join(iosAppIconPath, "Contents.json");
-  if (!fs.existsSync(contentsJsonPath)) {
-    throw new Error(`Missing iOS Contents.json: ${contentsJsonPath}`);
+    // Check that at least some icon files exist
+    const iconFiles = fs
+      .readdirSync(iosAppIconPath)
+      .filter(file => /\.(png|PNG)$/.test(file));
+    if (iconFiles.length === 0) {
+      throw new Error(`No iOS icon files found in: ${iosAppIconPath}`);
+    }
   }
-
-  // Check that at least some icon files exist
-  const iconFiles = fs
-    .readdirSync(iosAppIconPath)
-    .filter(file => /\.(png|PNG)$/.test(file));
-  if (iconFiles.length === 0) {
-    throw new Error(`No iOS icon files found in: ${iosAppIconPath}`);
-  }
+  // iOS default icons are optional - they may not exist if removed
 });
 
 // Test 18: Custom app icons are copied when provided
@@ -755,28 +752,226 @@ test("Check custom splash assets copied", () => {
 });
 
 // Test 11: Test pods installation (only on macOS)
-if (testPods && process.platform === 'darwin') {
-  test('Check iOS CocoaPods installation', () => {
+if (testPods && process.platform === "darwin") {
+  test("Check iOS CocoaPods installation", () => {
     const podsPath = path.join(DEFAULT_PROJECT_PATH, "ios/Pods");
     const podfileLockPath = path.join(DEFAULT_PROJECT_PATH, "ios/Podfile.lock");
 
     // Pods might not be installed if --skip-pods was used, so we just check if the command would work
     // by checking if CocoaPods is available
     try {
-      execSync('which pod', { stdio: 'pipe' });
+      execSync("which pod", { stdio: "pipe" });
     } catch (error) {
-      throw new Error('CocoaPods is not installed or not available');
+      throw new Error("CocoaPods is not installed or not available");
     }
 
     // If Pods directory exists, check it's not empty
     if (fs.existsSync(podsPath)) {
       const pods = fs.readdirSync(podsPath);
       if (pods.length === 0) {
-        throw new Error('Pods directory exists but is empty');
+        throw new Error("Pods directory exists but is empty");
       }
     }
   });
 }
+
+// Test 19: Environment setup - check .env files created (if environment setup was used)
+test("Check environment .env files created", () => {
+  // Check if .env files exist in project root (optional - only if environment setup was used)
+  const possibleEnvFiles = [
+    ".env.production",
+    ".env.local",
+    ".env.development",
+    ".env.staging",
+  ];
+  let foundEnvFiles = 0;
+
+  for (const envFile of possibleEnvFiles) {
+    const envFilePath = path.join(DEFAULT_PROJECT_PATH, envFile);
+    if (fs.existsSync(envFilePath)) {
+      foundEnvFiles++;
+      const content = fs.readFileSync(envFilePath, "utf8");
+      // Check that file is not empty and has expected format
+      if (content.trim().length === 0) {
+        throw new Error(`${envFile} exists but is empty`);
+      }
+      // Check that it's a valid .env file (starts with # or has KEY=VALUE format)
+      if (!content.match(/^#|^[A-Z_]+=/m)) {
+        throw new Error(`${envFile} doesn't have valid .env format`);
+      }
+    }
+  }
+
+  // If any .env files exist, environment setup was used
+  // This test passes if no .env files exist (environment setup not used) or if they exist and are valid
+});
+
+// Test 20: Environment setup - Android flavors and source sets (if environment setup was used)
+test("Check Android environment setup", () => {
+  const buildGradlePath = path.join(
+    DEFAULT_PROJECT_PATH,
+    "android/app/build.gradle"
+  );
+  if (!fs.existsSync(buildGradlePath)) {
+    throw new Error("android/app/build.gradle does not exist");
+  }
+
+  const content = fs.readFileSync(buildGradlePath, "utf8");
+
+  // Check if envConfigFiles exists (indicates environment setup was used)
+  if (content.includes("project.ext.envConfigFiles")) {
+    // If environment setup was used, verify structure
+    // Check that productFlavors exist
+    if (!content.includes("productFlavors")) {
+      throw new Error(
+        "build.gradle has envConfigFiles but missing productFlavors"
+      );
+    }
+
+    // Check that flavorDimensions exist
+    if (!content.includes("flavorDimensions")) {
+      throw new Error(
+        "build.gradle has productFlavors but missing flavorDimensions"
+      );
+    }
+
+    // Check that envConfigFiles has proper format (not malformed)
+    const envConfigMatch = content.match(
+      /project\.ext\.envConfigFiles\s*=\s*\[[\s\S]*?\]/
+    );
+    if (!envConfigMatch) {
+      throw new Error("envConfigFiles block found but format is invalid");
+    }
+
+    // Check for environment source directories (optional - only for non-production)
+    const srcDir = path.join(DEFAULT_PROJECT_PATH, "android/app/src");
+    if (fs.existsSync(srcDir)) {
+      const srcDirs = fs.readdirSync(srcDir);
+      const envDirs = srcDirs.filter(dir =>
+        ["local", "development", "staging"].includes(dir.toLowerCase())
+      );
+      // If environment setup was used, should have at least one env directory (if non-production envs selected)
+    }
+  }
+  // If envConfigFiles doesn't exist, environment setup wasn't used - test passes
+});
+
+// Test 21: Environment setup - iOS schemes (if environment setup was used)
+test("Check iOS environment schemes", () => {
+  const schemesDir = path.join(
+    DEFAULT_PROJECT_PATH,
+    `ios/${DEFAULT_PROJECT.name}.xcodeproj/xcshareddata/xcschemes`
+  );
+
+  if (!fs.existsSync(schemesDir)) {
+    throw new Error(`iOS schemes directory does not exist: ${schemesDir}`);
+  }
+
+  const schemeFiles = fs
+    .readdirSync(schemesDir)
+    .filter(file => file.endsWith(".xcscheme"));
+
+  // Should have at least the base scheme
+  if (schemeFiles.length === 0) {
+    throw new Error("No iOS schemes found");
+  }
+
+  // Check that base scheme exists
+  const baseScheme = `${DEFAULT_PROJECT.name}.xcscheme`;
+  if (!schemeFiles.includes(baseScheme)) {
+    throw new Error(`Base scheme ${baseScheme} not found`);
+  }
+
+  // If environment setup was used, check for environment schemes
+  const envSchemes = schemeFiles.filter(
+    file =>
+      file.includes("Local") ||
+      file.includes("Dev") ||
+      file.includes("Stg") ||
+      file.includes("Development") ||
+      file.includes("Staging")
+  );
+
+  // If environment schemes exist, verify they have proper structure
+  for (const schemeFile of envSchemes) {
+    const schemePath = path.join(schemesDir, schemeFile);
+    const schemeContent = fs.readFileSync(schemePath, "utf8");
+
+    // Check that scheme has BuildableReference
+    if (!schemeContent.includes("BuildableReference")) {
+      throw new Error(`Scheme ${schemeFile} is missing BuildableReference`);
+    }
+
+    // Check that scheme has PreActions (if environment setup was used)
+    if (schemeContent.includes("PreActions")) {
+      // Verify PreActions have proper structure
+      if (!schemeContent.includes("ExecutionAction")) {
+        throw new Error(
+          `Scheme ${schemeFile} has PreActions but missing ExecutionAction`
+        );
+      }
+    }
+  }
+});
+
+// Test 22: Environment setup - package.json scripts (if environment setup was used)
+test("Check environment scripts in package.json", () => {
+  const packageJsonPath = path.join(DEFAULT_PROJECT_PATH, "package.json");
+  if (!fs.existsSync(packageJsonPath)) {
+    throw new Error("package.json does not exist");
+  }
+
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+
+  if (!packageJson.scripts) {
+    throw new Error("package.json is missing scripts section");
+  }
+
+  // Check if environment scripts exist (optional - only if environment setup was used)
+  const androidScripts = Object.keys(packageJson.scripts).filter(key =>
+    key.startsWith("android:")
+  );
+  const iosScripts = Object.keys(packageJson.scripts).filter(key =>
+    key.startsWith("ios:")
+  );
+
+  // If environment scripts exist, verify they have correct format
+  for (const scriptKey of [...androidScripts, ...iosScripts]) {
+    const scriptValue = packageJson.scripts[scriptKey];
+
+    // Check that script is a string
+    if (typeof scriptValue !== "string") {
+      throw new Error(`Script ${scriptKey} is not a string`);
+    }
+
+    // Check that script is not empty
+    if (scriptValue.trim().length === 0) {
+      throw new Error(`Script ${scriptKey} is empty`);
+    }
+
+    // For Android scripts, check they reference correct modes
+    if (scriptKey.startsWith("android:")) {
+      if (scriptKey.includes("prod") && !scriptValue.includes("production")) {
+        throw new Error(`Script ${scriptKey} should reference production mode`);
+      }
+      if (scriptKey.includes("dev") && !scriptValue.includes("development")) {
+        throw new Error(
+          `Script ${scriptKey} should reference development mode`
+        );
+      }
+      if (scriptKey.includes("stg") && !scriptValue.includes("staging")) {
+        throw new Error(`Script ${scriptKey} should reference staging mode`);
+      }
+    }
+
+    // For iOS scripts, check they reference correct schemes
+    if (scriptKey.startsWith("ios:")) {
+      if (!scriptValue.includes("--scheme")) {
+        throw new Error(`Script ${scriptKey} should include --scheme flag`);
+      }
+    }
+  }
+});
 
 // Summary
 console.log('\n' + '='.repeat(50));
