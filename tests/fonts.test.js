@@ -1,11 +1,14 @@
 const fs = require("fs");
 const path = require("path");
 const { test, log } = require("./test-helpers");
-const { WITH_FONTS_PROJECT, WITH_FONTS_PROJECT_PATH } = require("./test-setup");
+const testSetup = require("./test-setup");
 
 module.exports = function runFontsTests() {
+  const { WITH_FONTS_PROJECT } = testSetup;
+
   // Test 30: Fonts - Android fonts copied to main/assets/fonts
   test("Check Android fonts copied to main/assets/fonts when fonts provided", () => {
+    const { WITH_FONTS_PROJECT_PATH } = testSetup;
     // Check if fonts project was created
     if (!WITH_FONTS_PROJECT_PATH || !fs.existsSync(WITH_FONTS_PROJECT_PATH)) {
       log("Fonts test project not created, skipping font tests", "info");
@@ -52,6 +55,7 @@ module.exports = function runFontsTests() {
 
   // Test 31: Fonts - Android link-assets-manifest.json contains fonts
   test("Check Android link-assets-manifest.json contains fonts when fonts provided", () => {
+    const { WITH_FONTS_PROJECT_PATH } = testSetup;
     if (!WITH_FONTS_PROJECT_PATH || !fs.existsSync(WITH_FONTS_PROJECT_PATH)) {
       log("Fonts test project not created, skipping font tests", "info");
       return;
@@ -101,6 +105,7 @@ module.exports = function runFontsTests() {
 
   // Test 32: Fonts - iOS Info.plist contains UIAppFonts when fonts provided
   test("Check iOS Info.plist contains UIAppFonts when fonts provided", () => {
+    const { WITH_FONTS_PROJECT_PATH } = testSetup;
     if (!WITH_FONTS_PROJECT_PATH || !fs.existsSync(WITH_FONTS_PROJECT_PATH)) {
       log("Fonts test project not created, skipping font tests", "info");
       return;
@@ -183,6 +188,7 @@ module.exports = function runFontsTests() {
 
   // Test 33: Fonts - iOS link-assets-manifest.json contains fonts
   test("Check iOS link-assets-manifest.json contains fonts when fonts provided", () => {
+    const { WITH_FONTS_PROJECT_PATH } = testSetup;
     if (!WITH_FONTS_PROJECT_PATH || !fs.existsSync(WITH_FONTS_PROJECT_PATH)) {
       log("Fonts test project not created, skipping font tests", "info");
       return;
@@ -230,6 +236,7 @@ module.exports = function runFontsTests() {
 
   // Test 34: Fonts - react-native.config.js contains assets array when fonts provided
   test("Check react-native.config.js contains assets array when fonts provided", () => {
+    const { WITH_FONTS_PROJECT_PATH } = testSetup;
     if (!WITH_FONTS_PROJECT_PATH || !fs.existsSync(WITH_FONTS_PROJECT_PATH)) {
       log("Fonts test project not created, skipping font tests", "info");
       return;
@@ -265,6 +272,7 @@ module.exports = function runFontsTests() {
 
   // Test 35: Fonts - iOS project.pbxproj contains font references
   test("Check iOS project.pbxproj contains font references when fonts provided", () => {
+    const { WITH_FONTS_PROJECT_PATH } = testSetup;
     if (!WITH_FONTS_PROJECT_PATH || !fs.existsSync(WITH_FONTS_PROJECT_PATH)) {
       log("Fonts test project not created, skipping font tests", "info");
       return;

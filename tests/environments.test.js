@@ -1,16 +1,17 @@
 const fs = require("fs");
 const path = require("path");
 const { test, log } = require("./test-helpers");
-const {
-  DEFAULT_PROJECT,
-  DEFAULT_PROJECT_PATH,
-  NO_ENV_NO_FIREBASE_PROJECT,
-  NO_ENV_NO_FIREBASE_PROJECT_PATH,
-} = require("./test-setup");
+const testSetup = require("./test-setup");
 
 module.exports = function runEnvironmentTests() {
+  const { DEFAULT_PROJECT, NO_ENV_NO_FIREBASE_PROJECT } = testSetup;
+
   // Test 19: Environment setup - check .env files created (if environment setup was used)
   test("Check environment .env files created", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
     // Check if .env files exist in project root (optional - only if environment setup was used)
     const possibleEnvFiles = [
       ".env.production",
@@ -42,6 +43,11 @@ module.exports = function runEnvironmentTests() {
 
   // Test 20: Environment setup - Android flavors and source sets (if environment setup was used)
   test("Check Android environment setup", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const buildGradlePath = path.join(
       DEFAULT_PROJECT_PATH,
       "android/app/build.gradle"
@@ -92,6 +98,11 @@ module.exports = function runEnvironmentTests() {
 
   // Test 21: Environment setup - iOS schemes (if environment setup was used)
   test("Check iOS environment schemes", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const schemesDir = path.join(
       DEFAULT_PROJECT_PATH,
       `ios/${DEFAULT_PROJECT.name}.xcodeproj/xcshareddata/xcschemes`
@@ -151,6 +162,11 @@ module.exports = function runEnvironmentTests() {
 
   // Test 22: Environment setup - package.json scripts (if environment setup was used)
   test("Check environment scripts in package.json", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const packageJsonPath = path.join(DEFAULT_PROJECT_PATH, "package.json");
     if (!fs.existsSync(packageJsonPath)) {
       throw new Error("package.json does not exist");
@@ -212,6 +228,11 @@ module.exports = function runEnvironmentTests() {
 
   // Test 24: iOS scheme renamed when no environments selected
   test("Check iOS scheme renamed from HelloWorld when no environments", () => {
+    const { NO_ENV_NO_FIREBASE_PROJECT_PATH } = testSetup;
+    if (!NO_ENV_NO_FIREBASE_PROJECT_PATH) {
+      throw new Error("NO_ENV_NO_FIREBASE_PROJECT_PATH is not initialized");
+    }
+
     const schemesDir = path.join(
       NO_ENV_NO_FIREBASE_PROJECT_PATH,
       `ios/${NO_ENV_NO_FIREBASE_PROJECT.name}.xcodeproj/xcshareddata/xcschemes`
@@ -296,6 +317,11 @@ module.exports = function runEnvironmentTests() {
 
   // Test 24.1: iOS scheme structure when no environments selected
   test("Check iOS scheme structure when no environments selected", () => {
+    const { NO_ENV_NO_FIREBASE_PROJECT_PATH } = testSetup;
+    if (!NO_ENV_NO_FIREBASE_PROJECT_PATH) {
+      throw new Error("NO_ENV_NO_FIREBASE_PROJECT_PATH is not initialized");
+    }
+
     const schemesDir = path.join(
       NO_ENV_NO_FIREBASE_PROJECT_PATH,
       `ios/${NO_ENV_NO_FIREBASE_PROJECT.name}.xcodeproj/xcshareddata/xcschemes`

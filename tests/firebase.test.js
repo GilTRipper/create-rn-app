@@ -1,16 +1,18 @@
 const fs = require("fs");
 const path = require("path");
 const { test } = require("./test-helpers");
-const {
-  DEFAULT_PROJECT,
-  DEFAULT_PROJECT_PATH,
-  NO_ENV_NO_FIREBASE_PROJECT,
-  NO_ENV_NO_FIREBASE_PROJECT_PATH,
-} = require("./test-setup");
+const testSetup = require("./test-setup");
 
 module.exports = function runFirebaseTests() {
+  const { DEFAULT_PROJECT, NO_ENV_NO_FIREBASE_PROJECT } = testSetup;
+
   // Test 23: Firebase not included by default
   test("Check Firebase dependencies not included when not enabled", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const packageJsonPath = path.join(DEFAULT_PROJECT_PATH, "package.json");
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 
@@ -29,6 +31,11 @@ module.exports = function runFirebaseTests() {
 
   // Test 25: GoogleService-Info.plist not in Xcode project when Firebase disabled
   test("Check GoogleService-Info.plist not in Xcode project when Firebase disabled", () => {
+    const { NO_ENV_NO_FIREBASE_PROJECT_PATH } = testSetup;
+    if (!NO_ENV_NO_FIREBASE_PROJECT_PATH) {
+      throw new Error("NO_ENV_NO_FIREBASE_PROJECT_PATH is not initialized");
+    }
+
     const pbxprojPath = path.join(
       NO_ENV_NO_FIREBASE_PROJECT_PATH,
       `ios/${NO_ENV_NO_FIREBASE_PROJECT.name}.xcodeproj/project.pbxproj`
@@ -60,6 +67,11 @@ module.exports = function runFirebaseTests() {
 
   // Test 27: Podfile doesn't have Firebase pods when Firebase disabled
   test("Check Podfile doesn't have Firebase pods when Firebase disabled", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const podfilePath = path.join(DEFAULT_PROJECT_PATH, "ios/Podfile");
 
     if (!fs.existsSync(podfilePath)) {
@@ -124,6 +136,11 @@ module.exports = function runFirebaseTests() {
 
   // Test 28: AppDelegate doesn't have Firebase imports when Firebase disabled
   test("Check AppDelegate doesn't have Firebase when Firebase disabled", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const appDelegatePath = path.join(
       DEFAULT_PROJECT_PATH,
       `ios/${DEFAULT_PROJECT.name}/AppDelegate.swift`

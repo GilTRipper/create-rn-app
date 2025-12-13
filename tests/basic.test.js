@@ -1,11 +1,18 @@
 const fs = require("fs");
 const path = require("path");
 const { test, log } = require("./test-helpers");
-const { DEFAULT_PROJECT, DEFAULT_PROJECT_PATH } = require("./test-setup");
+const testSetup = require("./test-setup");
 
 module.exports = function runBasicTests() {
+  const { DEFAULT_PROJECT } = testSetup;
+
   // Test 2: Check project structure
   test("Check project structure", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const requiredFiles = [
       "package.json",
       "app.json",
@@ -28,6 +35,10 @@ module.exports = function runBasicTests() {
 
   // Test 3: Check package.json content
   test("Check package.json content", () => {
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const packageJsonPath = path.join(DEFAULT_PROJECT_PATH, "package.json");
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
 
@@ -40,6 +51,10 @@ module.exports = function runBasicTests() {
 
   // Test 4: Check app.json content
   test("Check app.json content", () => {
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const appJsonPath = path.join(DEFAULT_PROJECT_PATH, "app.json");
     const appJson = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
 
@@ -52,6 +67,10 @@ module.exports = function runBasicTests() {
 
   // Test 9: Check package.json has dependencies defined (skipped installation to avoid patch issues)
   test("Check package.json has dependencies defined", () => {
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const packageJsonPath = path.join(DEFAULT_PROJECT_PATH, "package.json");
 
     if (!fs.existsSync(packageJsonPath)) {
@@ -103,6 +122,11 @@ module.exports = function runBasicTests() {
 
   // Test 10: Check patches directory exists (patches are copied but not applied without installation)
   test("Check patches directory exists", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const patchesPath = path.join(DEFAULT_PROJECT_PATH, "patches");
 
     if (!fs.existsSync(patchesPath)) {

@@ -2,17 +2,17 @@ const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
 const { test } = require("./test-helpers");
-const {
-  DEFAULT_PROJECT,
-  DEFAULT_PROJECT_PATH,
-  NO_ENV_NO_FIREBASE_PROJECT,
-  NO_ENV_NO_FIREBASE_PROJECT_PATH,
-  testPods,
-} = require("./test-setup");
+const testSetup = require("./test-setup");
 
 module.exports = function runIosTests() {
+  const { DEFAULT_PROJECT, NO_ENV_NO_FIREBASE_PROJECT, testPods } = testSetup;
+
   // Test 5: Check Podfile has correct target name
   test("Check Podfile has correct target name", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
     const podfilePath = path.join(DEFAULT_PROJECT_PATH, "ios/Podfile");
     const podfileContent = fs.readFileSync(podfilePath, "utf8");
 
@@ -25,6 +25,10 @@ module.exports = function runIosTests() {
 
   // Test 7: Check iOS project structure
   test("Check iOS project structure", () => {
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const iosFiles = [
       `ios/${DEFAULT_PROJECT.name}/Info.plist`,
       `ios/${DEFAULT_PROJECT.name}.xcodeproj/project.pbxproj`,
@@ -41,6 +45,10 @@ module.exports = function runIosTests() {
 
   // Test 12: iOS bundle identifier replaced in pbxproj
   test("Check iOS pbxproj bundle identifier", () => {
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const pbxprojPath = path.join(
       DEFAULT_PROJECT_PATH,
       `ios/${DEFAULT_PROJECT.name}.xcodeproj/project.pbxproj`
@@ -57,6 +65,10 @@ module.exports = function runIosTests() {
 
   // Test 13: iOS display name set in Info.plist
   test("Check iOS Info.plist display name", () => {
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const plistPath = path.join(
       DEFAULT_PROJECT_PATH,
       `ios/${DEFAULT_PROJECT.name}/Info.plist`
@@ -80,6 +92,10 @@ module.exports = function runIosTests() {
 
   // Test 29: AppDelegate withModuleName is replaced correctly
   test("Check AppDelegate withModuleName is replaced correctly", () => {
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const appDelegatePath = path.join(
       DEFAULT_PROJECT_PATH,
       `ios/${DEFAULT_PROJECT.name}/AppDelegate.swift`
@@ -125,6 +141,11 @@ module.exports = function runIosTests() {
   // Test 11: Test pods installation (only on macOS)
   if (testPods && process.platform === "darwin") {
     test("Check iOS CocoaPods installation", () => {
+      const { DEFAULT_PROJECT_PATH } = testSetup;
+      if (!DEFAULT_PROJECT_PATH) {
+        throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+      }
+
       const podsPath = path.join(DEFAULT_PROJECT_PATH, "ios/Pods");
       const podfileLockPath = path.join(
         DEFAULT_PROJECT_PATH,

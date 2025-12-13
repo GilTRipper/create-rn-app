@@ -1,11 +1,18 @@
 const fs = require("fs");
 const path = require("path");
 const { test } = require("./test-helpers");
-const { DEFAULT_PROJECT, DEFAULT_PROJECT_PATH } = require("./test-setup");
+const testSetup = require("./test-setup");
 
 module.exports = function runAndroidTests() {
+  const { DEFAULT_PROJECT } = testSetup;
+
   // Test 8: Check Android package structure
   test("Check Android package structure", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const bundleParts = DEFAULT_PROJECT.bundleId.split(".");
     const javaPath = path.join(
       DEFAULT_PROJECT_PATH,
@@ -25,6 +32,11 @@ module.exports = function runAndroidTests() {
 
   // Test 14: Android strings.xml app_name uses display name
   test("Check Android app_name equals display name", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const stringsPath = path.join(
       DEFAULT_PROJECT_PATH,
       "android/app/src/main/res/values/strings.xml"
@@ -41,6 +53,11 @@ module.exports = function runAndroidTests() {
 
   // Test 26: Android applicationId correctly set in build.gradle
   test("Check Android applicationId in build.gradle defaultConfig", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     const buildGradlePath = path.join(
       DEFAULT_PROJECT_PATH,
       "android/app/build.gradle"

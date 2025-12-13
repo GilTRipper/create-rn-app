@@ -1,18 +1,18 @@
 const fs = require("fs");
 const path = require("path");
 const { test } = require("./test-helpers");
-const {
-  DEFAULT_PROJECT,
-  DEFAULT_PROJECT_PATH,
-  WITH_SPLASH_PROJECT,
-  WITH_SPLASH_PROJECT_PATH,
-  WITH_ICONS_PROJECT,
-  WITH_ICONS_PROJECT_PATH,
-} = require("./test-setup");
+const testSetup = require("./test-setup");
 
 module.exports = function runAssetsTests() {
+  const { DEFAULT_PROJECT, WITH_SPLASH_PROJECT, WITH_ICONS_PROJECT } =
+    testSetup;
+
   // Test 15: Default splash placeholders created when no assets provided
   test("Check default splash placeholders exist", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
     const iosFiles = [
       path.join(
         DEFAULT_PROJECT_PATH,
@@ -60,6 +60,11 @@ module.exports = function runAssetsTests() {
 
   // Test 16: Custom splash assets are copied when provided
   test("Check custom splash assets copied", () => {
+    const { WITH_SPLASH_PROJECT_PATH } = testSetup;
+    if (!WITH_SPLASH_PROJECT_PATH) {
+      throw new Error("WITH_SPLASH_PROJECT_PATH is not initialized");
+    }
+
     const iosTargetDir = path.join(
       WITH_SPLASH_PROJECT_PATH,
       `ios/${WITH_SPLASH_PROJECT.name}/Images.xcassets/SplashScreen.imageset`
@@ -114,6 +119,11 @@ module.exports = function runAssetsTests() {
 
   // Test 17: Default app icons exist when no icons provided
   test("Check default app icons exist", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
+    if (!DEFAULT_PROJECT_PATH) {
+      throw new Error("DEFAULT_PROJECT_PATH is not initialized");
+    }
+
     // Check Android default icons exist
     const densities = [
       "mipmap-hdpi",
@@ -182,6 +192,11 @@ module.exports = function runAssetsTests() {
 
   // Test 18: Custom app icons are copied when provided
   test("Check custom app icons copied", () => {
+    const { WITH_ICONS_PROJECT_PATH } = testSetup;
+    if (!WITH_ICONS_PROJECT_PATH) {
+      throw new Error("WITH_ICONS_PROJECT_PATH is not initialized");
+    }
+
     // Check Android icons
     const androidSourceDir = path.join(
       WITH_ICONS_PROJECT.appIconDir,
