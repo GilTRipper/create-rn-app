@@ -44,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - iOS bundle identifier forced in `.xcodeproj` to match CLI input (replaces default `org.reactjs.native.example.*`)
 - Xcode workspace/project links updated to new app name to avoid leftover `helloworld` node
 - Splash assets copy logic now renames inputs to the required target names (iOS SplashScreen@* and Android splash.png), handling arbitrary source filenames
+- iOS scheme automatically renamed from `HelloWorld` to project name when environments are not selected
+- Firebase `GoogleService-Info.plist` file placement:
+  - Single environment: placed directly in `ios/{projectName}/GoogleService-Info.plist` and added as file reference to Xcode project
+  - Multiple environments: placed in `ios/GoogleServices/<env>/GoogleService-Info.plist` and added as `GoogleServices` folder reference to Xcode project
+- Removed default broken `GoogleService-Info.plist` reference from template (red link in Xcode)
+- `GoogleService-Info.plist` is only added to Xcode project when Firebase is enabled
+- Android `applicationId` in `build.gradle` `defaultConfig` now correctly updates even after other replacements
 
 ## [1.0.2] - 2025-11-30
 

@@ -25,10 +25,17 @@ const WITH_ICONS_PROJECT = {
   appIconDir: path.join("/tmp", "test-e2e-icon-assets"),
 };
 
+const NO_ENV_NO_FIREBASE_PROJECT = {
+  name: "test-e2e-no-env-no-firebase",
+  bundleId: "com.test.noenvnofirebase",
+  displayName: "No Env No Firebase",
+};
+
 const projectPaths = [
   path.join("/tmp", DEFAULT_PROJECT.name),
   path.join("/tmp", WITH_SPLASH_PROJECT.name),
   path.join("/tmp", WITH_ICONS_PROJECT.name),
+  path.join("/tmp", NO_ENV_NO_FIREBASE_PROJECT.name),
 ];
 
 // Parse command line arguments
@@ -91,6 +98,8 @@ function cleanupAll() {
   if (fs.existsSync(WITH_ICONS_PROJECT.appIconDir || "")) {
     cleanupPath(WITH_ICONS_PROJECT.appIconDir);
   }
+  // Cleanup no-env-no-firebase project
+  cleanupPath(path.join("/tmp", NO_ENV_NO_FIREBASE_PROJECT.name));
 }
 
 // Cleanup before starting
@@ -119,13 +128,27 @@ process.on("unhandledRejection", reason => {
 
 log(`Starting E2E tests with ${packageManager}...`, "info");
 
-function createProject({ name, bundleId, displayName, splashDir, appIconDir }) {
+function createProject({
+  name,
+  bundleId,
+  displayName,
+  splashDir,
+  appIconDir,
+  skipEnvs = false,
+  enableFirebase = false,
+  firebaseModules = [],
+  firebaseConfigDir = null,
+}) {
   const projectPath = path.join("/tmp", name);
   const splashFlag = splashDir ? ` --splash-screen-dir "${splashDir}"` : "";
   const iconFlag = appIconDir ? ` --app-icon-dir "${appIconDir}"` : "";
-  const command = `create-rn-app ${name} -p ${packageManager} --bundle-id ${bundleId} --display-name "${displayName}" --skip-git --skip-install --yes${splashFlag}${iconFlag}`;
+
+  // --yes flag automatically skips optional prompts (environments, Firebase)
+  // So for testing "no envs, no Firebase" scenario, we can just use --yes
+  let command = `create-rn-app ${name} -p ${packageManager} --bundle-id ${bundleId} --display-name "${displayName}" --skip-git --skip-install --yes${splashFlag}${iconFlag}`;
 
   log(`Running: ${command}`, "info");
+
   try {
     execSync(command, {
       cwd: "/tmp",
@@ -270,6 +293,12 @@ const WITH_SPLASH_PROJECT_PATH = createProject(WITH_SPLASH_PROJECT);
 // Prepare custom app icons and create project with them
 prepareAppIconsDir();
 const WITH_ICONS_PROJECT_PATH = createProject(WITH_ICONS_PROJECT);
+
+// Create project without environments and without Firebase (default --yes behavior)
+// --yes flag automatically skips optional prompts, so this will create a project without envs and Firebase
+const NO_ENV_NO_FIREBASE_PROJECT_PATH = createProject(
+  NO_ENV_NO_FIREBASE_PROJECT
+);
 
 // Test 2: Check project structure
 test("Check project structure", () => {
@@ -971,6 +1000,253 @@ test("Check environment scripts in package.json", () => {
         throw new Error(`Script ${scriptKey} should include --scheme flag`);
       }
     }
+  }
+});
+
+// Test 23: Firebase not included by default
+test("Check Firebase dependencies not included when not enabled", () => {
+  const packageJsonPath = path.join(DEFAULT_PROJECT_PATH, "package.json");
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+
+  const firebaseDeps = Object.keys(packageJson.dependencies || {}).filter(dep =>
+    dep.startsWith("@react-native-firebase/")
+  );
+
+  if (firebaseDeps.length > 0) {
+    throw new Error(
+      `Firebase dependencies found when Firebase should not be enabled: ${firebaseDeps.join(
+        ", "
+      )}`
+    );
+  }
+});
+
+// Test 24: iOS scheme renamed when no environments selected
+test("Check iOS scheme renamed from HelloWorld when no environments", () => {
+  const schemesDir = path.join(
+    NO_ENV_NO_FIREBASE_PROJECT_PATH,
+    `ios/${NO_ENV_NO_FIREBASE_PROJECT.name}.xcodeproj/xcshareddata/xcschemes`
+  );
+
+  if (!fs.existsSync(schemesDir)) {
+    // Schemes directory might not exist if pods are skipped
+    return;
+  }
+
+  const schemeFiles = fs
+    .readdirSync(schemesDir)
+    .filter(file => file.endsWith(".xcscheme"));
+
+  if (schemeFiles.length === 0) {
+    return;
+  }
+
+  // Check that HelloWorld scheme doesn't exist
+  const helloWorldScheme = schemeFiles.find(
+    file =>
+      file.includes("HelloWorld") || file.toLowerCase().includes("helloworld")
+  );
+
+  if (helloWorldScheme) {
+    throw new Error(
+      `HelloWorld scheme still exists: ${helloWorldScheme}. Should be renamed to ${NO_ENV_NO_FIREBASE_PROJECT.name}.xcscheme`
+    );
+  }
+
+  // Check that project name scheme exists
+  const projectScheme = `${NO_ENV_NO_FIREBASE_PROJECT.name}.xcscheme`;
+  if (!schemeFiles.includes(projectScheme)) {
+    throw new Error(
+      `Expected scheme ${projectScheme} not found. Found: ${schemeFiles.join(
+        ", "
+      )}`
+    );
+  }
+
+  // Check scheme content doesn't contain HelloWorld
+  const schemePath = path.join(schemesDir, projectScheme);
+  const schemeContent = fs.readFileSync(schemePath, "utf8");
+
+  if (
+    schemeContent.includes("HelloWorld") ||
+    schemeContent.includes("helloworld")
+  ) {
+    throw new Error(
+      `Scheme ${projectScheme} still contains HelloWorld references`
+    );
+  }
+});
+
+// Test 25: GoogleService-Info.plist not in Xcode project when Firebase disabled
+test("Check GoogleService-Info.plist not in Xcode project when Firebase disabled", () => {
+  const pbxprojPath = path.join(
+    NO_ENV_NO_FIREBASE_PROJECT_PATH,
+    `ios/${NO_ENV_NO_FIREBASE_PROJECT.name}.xcodeproj/project.pbxproj`
+  );
+
+  if (!fs.existsSync(pbxprojPath)) {
+    throw new Error("project.pbxproj not found");
+  }
+
+  const content = fs.readFileSync(pbxprojPath, "utf8");
+
+  // Check that GoogleService-Info.plist is not referenced
+  if (content.includes("GoogleService-Info.plist")) {
+    throw new Error(
+      "GoogleService-Info.plist found in project.pbxproj when Firebase should be disabled"
+    );
+  }
+
+  // Check that GoogleServices folder is not referenced
+  if (
+    content.includes("GoogleServices") &&
+    content.includes("PBXFileSystemSynchronizedRootGroup")
+  ) {
+    throw new Error(
+      "GoogleServices folder found in project.pbxproj when Firebase should be disabled"
+    );
+  }
+});
+
+// Test 26: Android applicationId correctly set in build.gradle
+test("Check Android applicationId in build.gradle defaultConfig", () => {
+  const buildGradlePath = path.join(
+    DEFAULT_PROJECT_PATH,
+    "android/app/build.gradle"
+  );
+
+  if (!fs.existsSync(buildGradlePath)) {
+    throw new Error("android/app/build.gradle does not exist");
+  }
+
+  const content = fs.readFileSync(buildGradlePath, "utf8");
+
+  // Find defaultConfig block
+  const defaultConfigMatch = content.match(/defaultConfig\s*\{([\s\S]*?)\}/);
+  if (!defaultConfigMatch) {
+    throw new Error("defaultConfig block not found in build.gradle");
+  }
+
+  const defaultConfigContent = defaultConfigMatch[1];
+
+  // Check that applicationId is set correctly
+  const applicationIdRegex = /applicationId\s+"([^"]+)"/;
+  const applicationIdMatch = defaultConfigContent.match(applicationIdRegex);
+
+  if (!applicationIdMatch) {
+    throw new Error("applicationId not found in defaultConfig");
+  }
+
+  const applicationId = applicationIdMatch[1];
+
+  if (applicationId !== DEFAULT_PROJECT.bundleId) {
+    throw new Error(
+      `Expected applicationId "${DEFAULT_PROJECT.bundleId}", got "${applicationId}"`
+    );
+  }
+
+  // Also check namespace
+  const namespaceRegex = /namespace\s+"([^"]+)"/;
+  const namespaceMatch = content.match(namespaceRegex);
+
+  if (!namespaceMatch) {
+    throw new Error("namespace not found in build.gradle");
+  }
+
+  const namespace = namespaceMatch[1];
+
+  if (namespace !== DEFAULT_PROJECT.bundleId) {
+    throw new Error(
+      `Expected namespace "${DEFAULT_PROJECT.bundleId}", got "${namespace}"`
+    );
+  }
+});
+
+// Test 27: Podfile doesn't have Firebase pods when Firebase disabled
+test("Check Podfile doesn't have Firebase pods when Firebase disabled", () => {
+  const podfilePath = path.join(DEFAULT_PROJECT_PATH, "ios/Podfile");
+
+  if (!fs.existsSync(podfilePath)) {
+    throw new Error("Podfile not found");
+  }
+
+  const content = fs.readFileSync(podfilePath, "utf8");
+
+  // Check that Firebase pods are not present
+  const firebasePods = [
+    "FirebaseCore",
+    "FirebaseRemoteConfig",
+    "FirebaseMessaging",
+    "FirebaseAnalytics",
+  ];
+
+  for (const pod of firebasePods) {
+    if (content.includes(`pod '${pod}'`)) {
+      throw new Error(
+        `Firebase pod ${pod} found in Podfile when Firebase should be disabled`
+      );
+    }
+  }
+
+  // Check that Google Services plugin is not in Android build.gradle
+  const androidBuildGradlePath = path.join(
+    DEFAULT_PROJECT_PATH,
+    "android/build.gradle"
+  );
+
+  if (fs.existsSync(androidBuildGradlePath)) {
+    const androidBuildGradleContent = fs.readFileSync(
+      androidBuildGradlePath,
+      "utf8"
+    );
+
+    if (androidBuildGradleContent.includes("com.google.gms:google-services")) {
+      throw new Error(
+        "Google Services plugin found in android/build.gradle when Firebase should be disabled"
+      );
+    }
+  }
+
+  // Check that Google Services plugin is not applied in app/build.gradle
+  const appBuildGradlePath = path.join(
+    DEFAULT_PROJECT_PATH,
+    "android/app/build.gradle"
+  );
+
+  if (fs.existsSync(appBuildGradlePath)) {
+    const appBuildGradleContent = fs.readFileSync(appBuildGradlePath, "utf8");
+
+    if (appBuildGradleContent.includes("com.google.gms.google-services")) {
+      throw new Error(
+        "Google Services plugin applied in android/app/build.gradle when Firebase should be disabled"
+      );
+    }
+  }
+});
+
+// Test 28: AppDelegate doesn't have Firebase imports when Firebase disabled
+test("Check AppDelegate doesn't have Firebase when Firebase disabled", () => {
+  const appDelegatePath = path.join(
+    DEFAULT_PROJECT_PATH,
+    `ios/${DEFAULT_PROJECT.name}/AppDelegate.swift`
+  );
+
+  if (!fs.existsSync(appDelegatePath)) {
+    throw new Error("AppDelegate.swift not found");
+  }
+
+  const content = fs.readFileSync(appDelegatePath, "utf8");
+
+  if (content.includes("import Firebase")) {
+    throw new Error(
+      "Firebase import found in AppDelegate.swift when Firebase should be disabled"
+    );
+  }
+
+  if (content.includes("FirebaseApp.configure()")) {
+    throw new Error(
+      "FirebaseApp.configure() found in AppDelegate.swift when Firebase should be disabled"
+    );
   }
 });
 

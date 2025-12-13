@@ -75,6 +75,7 @@ After dependency prompt, you can opt into environment configuration:
 - `.env.<env>` files are expected; pre-actions copy the chosen one to `.env` for iOS schemes.
 - Android: flavors are generated for the selected envs with matching `project.ext.envConfigFiles` and per-env `src/<env>` folders (assets/res copied from `main`, Kotlin stays in `main/java`).
 - iOS: shared schemes named `<AppName><Env>` with pre-actions copying the corresponding `.env.<env>` file.
+- **Note**: If you skip environment setup, the default iOS scheme will be automatically renamed from `HelloWorld` to your project name.
 
 ### Firebase Setup (Optional)
 
@@ -106,7 +107,9 @@ After environment selection, you'll be prompted to enable Firebase:
      ```
 
 The tool will automatically:
-- Copy iOS `GoogleService-Info.plist` files to `ios/GoogleServices/<env>/` for all environments (including production)
+- Copy iOS `GoogleService-Info.plist` files:
+  - **Single environment**: `ios/{projectName}/GoogleService-Info.plist` (directly in project folder)
+  - **Multiple environments**: `ios/GoogleServices/<env>/GoogleService-Info.plist` for each environment
 - Copy Android `google-services.json` files:
   - Production: `android/app/google-services.json` (root of app folder)
   - Other environments: `android/app/src/<env>/google-services.json`
@@ -114,6 +117,7 @@ The tool will automatically:
 - Update `AppDelegate.swift` with Firebase initialization
 - Add Google Services plugin to Android build files
 - Add selected Firebase dependencies to `package.json`
+- Add `GoogleService-Info.plist` to Xcode project (as file reference for single env, or as GoogleServices folder for multiple envs)
 
 **Note:** If you skip Firebase during project creation, you can always add it later manually or re-run the generator.
 
