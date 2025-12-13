@@ -8,8 +8,6 @@ const { checkNodeVersion, checkPackageManager } = require("./utils");
 const packageJson = require("../package.json");
 
 async function run() {
-  console.log(chalk.cyan.bold("\n🚀 Create React Native App\n"));
-
   program
     .name("create-rn-app")
     .description("Create a new React Native app with pre-configured setup")
@@ -38,6 +36,8 @@ async function run() {
     )
     .action(async (projectName, options) => {
       try {
+        console.log(chalk.cyan.bold("\n🚀 Create React Native App\n"));
+
         // Check Node version
         checkNodeVersion();
 

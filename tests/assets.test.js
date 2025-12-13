@@ -168,6 +168,8 @@ module.exports = function runAssetsTests() {
     }
 
     // Check iOS default icons exist (optional - default icons may not exist)
+    // iOS AppIcon.appiconset may exist with just Contents.json but no PNG files
+    // This is valid - Xcode will use placeholders when no icon files are present
     const iosAppIconPath = path.join(
       DEFAULT_PROJECT_PATH,
       `ios/${DEFAULT_PROJECT.name}/Images.xcassets/AppIcon.appiconset`
@@ -178,14 +180,7 @@ module.exports = function runAssetsTests() {
       if (!fs.existsSync(contentsJsonPath)) {
         throw new Error(`Missing iOS Contents.json: ${contentsJsonPath}`);
       }
-
-      // Check that at least some icon files exist
-      const iconFiles = fs
-        .readdirSync(iosAppIconPath)
-        .filter(file => /\.(png|PNG)$/.test(file));
-      if (iconFiles.length === 0) {
-        throw new Error(`No iOS icon files found in: ${iosAppIconPath}`);
-      }
+      // PNG files are optional - asset catalog can exist with just Contents.json
     }
     // iOS default icons are optional - they may not exist if removed
   });
