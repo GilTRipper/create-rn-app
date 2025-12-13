@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+
+const { execSync } = require('child_process');
+const { log, getTestStats, resetTestStats } = require('./test-helpers');
+const {
+  packageManager,
+  testPods,
+  DEFAULT_PROJECT_PATH,
+  WITH_SPLASH_PROJECT_PATH,
+  WITH_ICONS_PROJECT_PATH,
+  NO_ENV_NO_FIREBASE_PROJECT_PATH,
+  WITH_FONTS_PROJECT_PATH,
+  cleanupAll,
+} = require('./test-setup');
+
+// Import test modules
+const runBasicTests = require('./test-basic');
+const runIosTests = require('./test-ios');
+const runAndroidTests = require('./test-android');
+const runEnvironmentTests = require('./test-environments');
+const runFirebaseTests = require('./test-firebase');
+const runAssetsTests = require('./test-assets');
+const runFontsTests = require('./test-fonts');
+const runCliFlagsTests = require('./test-cli-flags');
+
+// Cleanup before starting
+cleanupAll();
+
+// Ensure cleanup on exit (even if process is killed)
+process.on("exit", cleanupAll);
+process.on("SIGINT", () => {
+  cleanupAll();
+  process.exit(1);
+});
+process.on("SIGTERM", () => {
+  cleanupAll();
+  process.exit(1);
+});
+process.on("uncaughtException", error => {
+  log(`Uncaught exception: ${error.message}`, "error");
+  cleanupAll();
+  process.exit(1);
+});
+process.on("unhandledRejection", reason => {
+  log(`Unhandled rejection: ${reason}`, "error");
+  cleanupAll();
+  process.exit(1);
+});
+
+log(`Starting E2E tests with ${packageManager}...`, "info");
+
+// Create projects
+const { createProject, prepareSplashAssetsDir, prepareAppIconsDir, prepareFontsDir } = require('./test-setup');
+
+// Note: Projects should be created in test-setup.js and exported
+// For now, we'll create them here
+const DEFAULT_PROJECT_PATH_LOCAL = createProject(require('./test-setup').DEFAULT_PROJECT);
+
+prepareSplashAssetsDir();
+const WITH_SPLASH_PROJECT_PATH_LOCAL = createProject(require('./test-setup').WITH_SPLASH_PROJECT);
+
+prepareAppIconsDir();
+const WITH_ICONS_PROJECT_PATH_LOCAL = createProject(require('./test-setup').WITH_ICONS_PROJECT);
+
+prepareFontsDir();
+const WITH_FONTS_PROJECT_PATH_LOCAL = createProject({
+  name: require('./test-setup').WITH_FONTS_PROJECT.name,
+  bundleId: require('./test-setup').WITH_FONTS_PROJECT.bundleId,
+  displayName: require('./test-setup').WITH_FONTS_PROJECT.displayName,
+});
+
+const NO_ENV_NO_FIREBASE_PROJECT_PATH_LOCAL = createProject(
+  require('./test-setup').NO_ENV_NO_FIREBASE_PROJECT
+);
+
+// Make project paths available to test modules
+// We'll need to refactor test-setup to export these
+// For now, we'll pass them as needed
+
+// Run all test suites
+log("\n=== Running Basic Tests ===", "info");
+runBasicTests();
+
+log("\n=== Running iOS Tests ===", "info");
+runIosTests();
+
+log("\n=== Running Android Tests ===", "info");
+runAndroidTests();
+
+log("\n=== Running Environment Tests ===", "info");
+runEnvironmentTests();
+
+log("\n=== Running Firebase Tests ===", "info");
+runFirebaseTests();
+
+log("\n=== Running Assets Tests ===", "info");
+runAssetsTests();
+
+log("\n=== Running Fonts Tests ===", "info");
+runFontsTests();
+
+log("\n=== Running CLI Flags Tests ===", "info");
+runCliFlagsTests();
+
+// Summary
+const { testsPassed, testsFailed } = getTestStats();
+console.log('\n' + '='.repeat(50));
+log(`Tests passed: ${testsPassed}`, 'success');
+if (testsFailed > 0) {
+  log(`Tests failed: ${testsFailed}`, "error");
+  cleanupAll();
+  process.exit(1);
+} else {
+  log("All tests passed!", "success");
+  cleanupAll();
+  process.exit(0);
+}
