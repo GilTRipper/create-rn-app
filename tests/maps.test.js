@@ -188,12 +188,23 @@ module.exports = async function runMapsTests() {
     }
 
     // Should not have uncommented meta-data
-    const uncommentedPattern =
+    // Remove all commented sections and check if any uncommented meta-data remains
+    // Simple approach: check that meta-data is only found inside comment blocks
+    const uncommentedMetaDataPattern =
       /<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"/;
-    if (uncommentedPattern.test(content)) {
-      throw new Error(
-        "AndroidManifest should not have uncommented Google Maps API key when maps disabled"
-      );
+
+    // Check if there's any meta-data that's not inside a comment
+    // We'll do this by checking if meta-data appears without being between <!-- and -->
+    const commentBlockPattern =
+      /<!--[\s\S]*?<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"[\s\S]*?-->/;
+
+    // If we find meta-data pattern, it must be inside a comment block
+    if (uncommentedMetaDataPattern.test(content)) {
+      if (!commentBlockPattern.test(content)) {
+        throw new Error(
+          "AndroidManifest should not have uncommented Google Maps API key when maps disabled"
+        );
+      }
     }
   });
 

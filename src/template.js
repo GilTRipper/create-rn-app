@@ -361,11 +361,9 @@ async function updateAndroidManifestForMaps(
 
   if (!enableGoogleMaps || !googleMapsApiKey) {
     // Ensure the Google Maps API key meta-data is commented out
-    // Match both commented and uncommented versions
+    // First check if there's an uncommented meta-data tag (any format)
     const uncommentedPattern =
-      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/>/;
-    const commentedPattern =
-      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<!-- <meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/> -->/;
+      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<meta-data[\s\S]*?android:name="com\.google\.android\.geo\.API_KEY"[\s\S]*?\/>/;
 
     if (uncommentedPattern.test(content)) {
       // Comment it out
@@ -373,24 +371,27 @@ async function updateAndroidManifestForMaps(
         uncommentedPattern,
         `$1<!-- Google Maps API Key -->\n$2<!-- <meta-data\n$2    android:name="com.google.android.geo.API_KEY"\n$2    android:value="\${GOOGLE_MAPS_API_KEY}" /> -->`
       );
-    } else if (!commentedPattern.test(content)) {
-      // If neither pattern matches, add commented version
-      content = content.replace(
-        /(\s*)<!-- Google Maps API Key -->/,
-        `$1<!-- Google Maps API Key -->\n$1    <!-- <meta-data\n$1    android:name="com.google.android.geo.API_KEY"\n$1    android:value="\${GOOGLE_MAPS_API_KEY}" /> -->`
-      );
     }
+    // If already commented (in any format), leave it as is - no action needed
   } else {
     // Uncomment and set the API key
-    const commentedPattern =
+    const commentedSingleLinePattern =
       /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<!-- <meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/> -->/;
+    const commentedMultiLinePattern =
+      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<!-- <meta-data[\s\S]*?android:name="com\.google\.android\.geo\.API_KEY"[\s\S]*?\/> -->/;
     const uncommentedPattern =
       /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/>/;
 
-    if (commentedPattern.test(content)) {
-      // Uncomment and set API key
+    if (commentedMultiLinePattern.test(content)) {
+      // Uncomment multi-line format and set API key
       content = content.replace(
-        commentedPattern,
+        commentedMultiLinePattern,
+        `$1<!-- Google Maps API Key -->\n$2<meta-data\n$2    android:name="com.google.android.geo.API_KEY"\n$2    android:value="${googleMapsApiKey}" />`
+      );
+    } else if (commentedSingleLinePattern.test(content)) {
+      // Uncomment single-line format and set API key
+      content = content.replace(
+        commentedSingleLinePattern,
         `$1<!-- Google Maps API Key -->\n$2<meta-data\n$2    android:name="com.google.android.geo.API_KEY"\n$2    android:value="${googleMapsApiKey}" />`
       );
     } else if (uncommentedPattern.test(content)) {

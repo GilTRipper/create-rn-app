@@ -3,6 +3,7 @@ const fs = require("fs");
 
 let testsPassed = 0;
 let testsFailed = 0;
+const testPromises = [];
 
 function log(message, type = "info") {
   const colors = {
@@ -16,22 +17,32 @@ function log(message, type = "info") {
 }
 
 async function test(name, fn) {
-  try {
-    log(`Testing: ${name}`, "info");
-    const result = fn();
-    // If function returns a Promise, wait for it
-    if (result && typeof result.then === "function") {
-      await result;
+  const testPromise = (async () => {
+    try {
+      log(`Testing: ${name}`, "info");
+      const result = fn();
+      // If function returns a Promise, wait for it
+      if (result && typeof result.then === "function") {
+        await result;
+      }
+      testsPassed++;
+      log(`Passed: ${name}`, "success");
+    } catch (error) {
+      testsFailed++;
+      log(`Failed: ${name} - ${error.message}`, "error");
+      if (error.stack) {
+        console.error(error.stack);
+      }
+      // Don't re-throw - we want to continue running other tests
     }
-    testsPassed++;
-    log(`Passed: ${name}`, "success");
-  } catch (error) {
-    testsFailed++;
-    log(`Failed: ${name} - ${error.message}`, "error");
-    if (error.stack) {
-      console.error(error.stack);
-    }
-  }
+  })();
+
+  testPromises.push(testPromise);
+  return testPromise;
+}
+
+async function waitForAllTests() {
+  await Promise.all(testPromises);
 }
 
 function cleanupPath(p) {
@@ -53,11 +64,13 @@ function getTestStats() {
 function resetTestStats() {
   testsPassed = 0;
   testsFailed = 0;
+  testPromises.length = 0;
 }
 
 module.exports = {
   log,
   test,
+  waitForAllTests,
   cleanupPath,
   getTestStats,
   resetTestStats,
