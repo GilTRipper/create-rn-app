@@ -43,7 +43,7 @@
     "react-native-bootsplash": "^6.3.11",
     "react-native-config": "^1.6.0",
     "react-native-date-picker": "5.0.13",
-    "react-native-device-info": "^15.0.1",
+    "react-native-nitro-device-info": "^1.4.2",
     "react-native-gesture-handler": "^2.29.1",
     "react-native-haptic-feedback": "^2.3.3",
     "react-native-image-picker": "^8.2.1",
