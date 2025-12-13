@@ -35,6 +35,7 @@ module.exports = function runBasicTests() {
 
   // Test 3: Check package.json content
   test("Check package.json content", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
     if (!DEFAULT_PROJECT_PATH) {
       throw new Error("DEFAULT_PROJECT_PATH is not initialized");
     }
@@ -51,6 +52,7 @@ module.exports = function runBasicTests() {
 
   // Test 4: Check app.json content
   test("Check app.json content", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
     if (!DEFAULT_PROJECT_PATH) {
       throw new Error("DEFAULT_PROJECT_PATH is not initialized");
     }
@@ -67,6 +69,7 @@ module.exports = function runBasicTests() {
 
   // Test 9: Check package.json has dependencies defined (skipped installation to avoid patch issues)
   test("Check package.json has dependencies defined", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
     if (!DEFAULT_PROJECT_PATH) {
       throw new Error("DEFAULT_PROJECT_PATH is not initialized");
     }
@@ -99,25 +102,6 @@ module.exports = function runBasicTests() {
         throw new Error(`Key dependency ${dep} not found in package.json`);
       }
     }
-  });
-
-  // Test 10: Check patches directory exists (patches are copied but not applied without installation)
-  test("Check patches directory exists", () => {
-    const patchesPath = path.join(DEFAULT_PROJECT_PATH, "patches");
-
-    if (!fs.existsSync(patchesPath)) {
-      throw new Error(
-        "patches directory not found - patches should be copied from template"
-      );
-    }
-
-    // Check that patches are present
-    const patches = fs.readdirSync(patchesPath);
-    if (patches.length === 0) {
-      throw new Error("patches directory is empty");
-    }
-
-    log("Package.json has all required dependencies defined", "success");
   });
 
   // Test 10: Check patches directory exists (patches are copied but not applied without installation)

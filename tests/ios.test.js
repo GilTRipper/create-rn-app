@@ -25,6 +25,7 @@ module.exports = function runIosTests() {
 
   // Test 7: Check iOS project structure
   test("Check iOS project structure", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
     if (!DEFAULT_PROJECT_PATH) {
       throw new Error("DEFAULT_PROJECT_PATH is not initialized");
     }
@@ -45,6 +46,7 @@ module.exports = function runIosTests() {
 
   // Test 12: iOS bundle identifier replaced in pbxproj
   test("Check iOS pbxproj bundle identifier", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
     if (!DEFAULT_PROJECT_PATH) {
       throw new Error("DEFAULT_PROJECT_PATH is not initialized");
     }
@@ -65,6 +67,7 @@ module.exports = function runIosTests() {
 
   // Test 13: iOS display name set in Info.plist
   test("Check iOS Info.plist display name", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
     if (!DEFAULT_PROJECT_PATH) {
       throw new Error("DEFAULT_PROJECT_PATH is not initialized");
     }
@@ -92,6 +95,7 @@ module.exports = function runIosTests() {
 
   // Test 29: AppDelegate withModuleName is replaced correctly
   test("Check AppDelegate withModuleName is replaced correctly", () => {
+    const { DEFAULT_PROJECT_PATH } = testSetup;
     if (!DEFAULT_PROJECT_PATH) {
       throw new Error("DEFAULT_PROJECT_PATH is not initialized");
     }
