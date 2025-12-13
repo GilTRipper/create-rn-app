@@ -366,6 +366,62 @@ async function getPrompts(projectNameArg, options) {
     }
   }
 
+  // Maps setup (interactive only, after Firebase)
+  let mapsConfig = {
+    enabled: false,
+    provider: null,
+    googleMapsApiKey: null,
+  };
+
+  if (!options.yes) {
+    const { mapsSelection } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "mapsSelection",
+        message: "Will you be using maps?",
+        choices: [
+          { name: "react-native-maps", value: "react-native-maps" },
+          { name: "Cancel", value: "__CANCEL__" },
+        ],
+        default: "__CANCEL__",
+      },
+    ]);
+
+    if (mapsSelection === "react-native-maps") {
+      mapsConfig.enabled = true;
+      mapsConfig.provider = "react-native-maps";
+
+      // Ask about Google Maps setup
+      const { enableGoogleMaps } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "enableGoogleMaps",
+          message: "Do you want to configure Google Maps?",
+          default: false,
+        },
+      ]);
+
+      if (enableGoogleMaps) {
+        mapsConfig.provider = "google-maps";
+
+        // Ask for Google Maps API key
+        const { googleMapsApiKey } = await inquirer.prompt([
+          {
+            type: "input",
+            name: "googleMapsApiKey",
+            message:
+              "Enter your Google Maps API key (or press Enter to skip and configure later):",
+            default: "",
+          },
+        ]);
+
+        if (googleMapsApiKey && googleMapsApiKey.trim().length > 0) {
+          mapsConfig.googleMapsApiKey = googleMapsApiKey.trim();
+        }
+      }
+    }
+  }
+
   // Check if directory already exists
   const projectPath = path.join(
     process.cwd(),
@@ -449,6 +505,7 @@ async function getPrompts(projectNameArg, options) {
     fontsDir,
     envSetupSelectedEnvs,
     firebase: firebaseConfig,
+    maps: mapsConfig,
   };
 }
 

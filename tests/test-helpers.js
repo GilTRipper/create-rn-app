@@ -15,10 +15,14 @@ function log(message, type = "info") {
   console.log(`${colors[type] || ""}${icon} ${message}${colors.reset}`);
 }
 
-function test(name, fn) {
+async function test(name, fn) {
   try {
     log(`Testing: ${name}`, "info");
-    fn();
+    const result = fn();
+    // If function returns a Promise, wait for it
+    if (result && typeof result.then === "function") {
+      await result;
+    }
     testsPassed++;
     log(`Passed: ${name}`, "success");
   } catch (error) {

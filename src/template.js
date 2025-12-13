@@ -251,6 +251,160 @@ async function updateAppDelegateForFirebase(projectPath, projectName) {
   await fs.writeFile(appDelegatePath, content, "utf8");
 }
 
+async function removeMapsDependencies(projectPath) {
+  const packageJsonPath = path.join(projectPath, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) return;
+
+  const content = await fs.readFile(packageJsonPath, "utf8");
+  const packageData = JSON.parse(content);
+
+  if (packageData.dependencies) {
+    delete packageData.dependencies["react-native-maps"];
+    delete packageData.dependencies["react-native-maps-directions"];
+  }
+
+  await fs.writeFile(
+    packageJsonPath,
+    JSON.stringify(packageData, null, 2) + "\n",
+    "utf8"
+  );
+}
+
+async function updatePodfileForMaps(projectPath, enableGoogleMaps) {
+  const podfilePath = path.join(projectPath, "ios/Podfile");
+  if (!(await fs.pathExists(podfilePath))) return;
+
+  let content = await fs.readFile(podfilePath, "utf8");
+
+  if (!enableGoogleMaps) {
+    // Remove Google Maps pod configuration
+    // Match the comment and pod declaration, including the rn_maps_path line
+    // Replace with newline to ensure proper spacing before post_install
+    content = content.replace(
+      /\s*# Google Maps для react-native-maps\s*\n\s*rn_maps_path = '\.\.\/node_modules\/react-native-maps'\s*\n\s*pod 'react-native-maps\/Google', :path => rn_maps_path\s*\n?/,
+      "\n"
+    );
+    // Ensure post_install always starts on a new line with proper indentation
+    // Normalize any spacing issues: ensure ) is followed by newline, then empty line, then post_install
+    content = content.replace(
+      /(\s*\))\s*\n?\s*post_install\s+do/,
+      "$1\n\n  post_install do"
+    );
+  }
+
+  await fs.writeFile(podfilePath, content, "utf8");
+}
+
+async function updateAppDelegateForMaps(
+  projectPath,
+  projectName,
+  enableGoogleMaps,
+  googleMapsApiKey
+) {
+  const appDelegatePath = path.join(
+    projectPath,
+    `ios/${projectName}/AppDelegate.swift`
+  );
+  if (!(await fs.pathExists(appDelegatePath))) return;
+
+  let content = await fs.readFile(appDelegatePath, "utf8");
+
+  if (!enableGoogleMaps) {
+    // Remove Google Maps import
+    content = content.replace(/import GoogleMaps\n/, "");
+    // Remove Google Maps initialization (with comment)
+    content = content.replace(
+      /\s*\/\/ Initialize Google Maps\s*\n\s*GMSServices\.provideAPIKey\("[^"]*"\)\s*\n\s*/,
+      ""
+    );
+  } else {
+    // Ensure Google Maps import exists
+    if (!content.includes("import GoogleMaps")) {
+      // Add import after other imports
+      content = content.replace(
+        /(import\s+\w+\n)+/,
+        match => `${match}import GoogleMaps\n`
+      );
+    }
+    // Replace API key if provided, otherwise leave placeholder
+    if (googleMapsApiKey) {
+      content = content.replace(
+        /GMSServices\.provideAPIKey\("<GOOGLE_MAPS_API_KEY>"\)/,
+        `GMSServices.provideAPIKey("${googleMapsApiKey}")`
+      );
+    }
+    // If no API key, ensure placeholder exists
+    if (!content.includes("GMSServices.provideAPIKey")) {
+      // Add initialization after didFinishLaunchingWithOptions opening
+      content = content.replace(
+        /(didFinishLaunchingWithOptions[^:]*:\s*Bool\s*\{)\s*/,
+        `$1\n    // Initialize Google Maps\n    GMSServices.provideAPIKey("<GOOGLE_MAPS_API_KEY>")\n    `
+      );
+    }
+  }
+
+  await fs.writeFile(appDelegatePath, content, "utf8");
+}
+
+async function updateAndroidManifestForMaps(
+  projectPath,
+  enableGoogleMaps,
+  googleMapsApiKey
+) {
+  const manifestPath = path.join(
+    projectPath,
+    "android/app/src/main/AndroidManifest.xml"
+  );
+  if (!(await fs.pathExists(manifestPath))) return;
+
+  let content = await fs.readFile(manifestPath, "utf8");
+
+  if (!enableGoogleMaps || !googleMapsApiKey) {
+    // Ensure the Google Maps API key meta-data is commented out
+    // Match both commented and uncommented versions
+    const uncommentedPattern =
+      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/>/;
+    const commentedPattern =
+      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<!-- <meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/> -->/;
+
+    if (uncommentedPattern.test(content)) {
+      // Comment it out
+      content = content.replace(
+        uncommentedPattern,
+        `$1<!-- Google Maps API Key -->\n$2<!-- <meta-data\n$2    android:name="com.google.android.geo.API_KEY"\n$2    android:value="\${GOOGLE_MAPS_API_KEY}" /> -->`
+      );
+    } else if (!commentedPattern.test(content)) {
+      // If neither pattern matches, add commented version
+      content = content.replace(
+        /(\s*)<!-- Google Maps API Key -->/,
+        `$1<!-- Google Maps API Key -->\n$1    <!-- <meta-data\n$1    android:name="com.google.android.geo.API_KEY"\n$1    android:value="\${GOOGLE_MAPS_API_KEY}" /> -->`
+      );
+    }
+  } else {
+    // Uncomment and set the API key
+    const commentedPattern =
+      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<!-- <meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/> -->/;
+    const uncommentedPattern =
+      /(\s*)<!-- Google Maps API Key -->\s*\n(\s*)<meta-data\s+android:name="com\.google\.android\.geo\.API_KEY"\s+android:value="[^"]*"\s*\/>/;
+
+    if (commentedPattern.test(content)) {
+      // Uncomment and set API key
+      content = content.replace(
+        commentedPattern,
+        `$1<!-- Google Maps API Key -->\n$2<meta-data\n$2    android:name="com.google.android.geo.API_KEY"\n$2    android:value="${googleMapsApiKey}" />`
+      );
+    } else if (uncommentedPattern.test(content)) {
+      // Replace existing API key
+      content = content.replace(
+        uncommentedPattern,
+        `$1<!-- Google Maps API Key -->\n$2<meta-data\n$2    android:name="com.google.android.geo.API_KEY"\n$2    android:value="${googleMapsApiKey}" />`
+      );
+    }
+  }
+
+  await fs.writeFile(manifestPath, content, "utf8");
+}
+
 // Generate a 24-character hex ID for Xcode project objects
 function generateXcodeId() {
   return Array.from({ length: 24 }, () =>
@@ -3041,12 +3195,17 @@ async function createApp(config) {
     fontsDir,
     envSetupSelectedEnvs = [],
     firebase = {},
+    maps = {},
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
   const firebaseEnabled = firebase?.enabled || false;
   const firebaseModules = firebase?.modules || [];
   const firebaseFilesByEnv = getGoogleFilesByEnv(firebase?.googleFiles);
+  const mapsEnabled = maps?.enabled || false;
+  const mapsProvider = maps?.provider || null;
+  const googleMapsApiKey = maps?.googleMapsApiKey || null;
+  const enableGoogleMaps = mapsProvider === "google-maps";
 
   // Step 1: Copy template
   const copySpinner = ora("Copying template files...").start();
@@ -3403,6 +3562,34 @@ async function createApp(config) {
         projectName,
         selectedEnvs,
         hasMultipleEnvs
+      );
+    }
+
+    // Maps setup
+    if (!mapsEnabled) {
+      // Remove react-native-maps dependencies if maps are not enabled
+      await removeMapsDependencies(projectPath);
+      // Also remove Google Maps code if maps are not enabled
+      await updatePodfileForMaps(projectPath, false);
+      await updateAppDelegateForMaps(projectPath, projectName, false, null);
+      await updateAndroidManifestForMaps(projectPath, false, null);
+    } else {
+      // Update Podfile for Google Maps (only affects iOS)
+      await updatePodfileForMaps(projectPath, enableGoogleMaps);
+      // Update AppDelegate for Google Maps (only affects iOS)
+      await updateAppDelegateForMaps(
+        projectPath,
+        projectName,
+        enableGoogleMaps,
+        googleMapsApiKey
+      );
+      // Update AndroidManifest for Google Maps
+      // On Android, Google Maps is always required for react-native-maps
+      // So we only comment if Google Maps is explicitly disabled AND no API key provided
+      await updateAndroidManifestForMaps(
+        projectPath,
+        enableGoogleMaps,
+        googleMapsApiKey
       );
     }
 

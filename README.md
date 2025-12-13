@@ -122,6 +122,43 @@ The tool will automatically:
 
 **Note:** If you skip Firebase during project creation, you can always add it later manually or re-run the generator.
 
+### Maps Setup (Optional)
+
+After Firebase setup, you'll be prompted to configure maps:
+
+1. **Will you be using maps?** - Choose from:
+   - `react-native-maps` - Install react-native-maps library
+   - `Cancel` - Skip maps setup
+
+2. **If you selected react-native-maps**, you'll be asked:
+   - **Do you want to configure Google Maps?** - Choose whether to enable Google Maps support
+   
+3. **If you selected Google Maps**, you'll be prompted:
+   - **Enter your Google Maps API key** - Provide your API key or press Enter to skip and configure later
+
+The tool will automatically:
+- **When maps are not selected:**
+  - Remove `react-native-maps` and `react-native-maps-directions` from `package.json`
+  - Remove Google Maps code from `ios/Podfile`
+  - Remove Google Maps imports and initialization from `ios/{projectName}/AppDelegate.swift`
+  - Comment out Google Maps API key in `android/app/src/main/AndroidManifest.xml`
+
+- **When react-native-maps is selected but Google Maps is disabled:**
+  - Keep `react-native-maps` in `package.json`
+  - Remove Google Maps pod from `ios/Podfile` (uses Apple Maps on iOS)
+  - Remove Google Maps code from `AppDelegate.swift`
+  - Comment out Google Maps API key in `AndroidManifest.xml`
+
+- **When Google Maps is enabled:**
+  - Add Google Maps pod to `ios/Podfile`
+  - Add Google Maps import and initialization to `AppDelegate.swift`
+  - If API key is provided: Replace placeholders with your API key in both iOS and Android
+  - If API key is skipped: Leave placeholder `<GOOGLE_MAPS_API_KEY>` in `AppDelegate.swift` and comment out `AndroidManifest.xml` entry
+
+**Note:** On Android, Google Maps is required for react-native-maps. If you skip the API key, you'll need to configure it later in `android/local.properties` and uncomment the entry in `AndroidManifest.xml`.
+
+**Note:** If you skip maps during project creation, you can always add them later manually or re-run the generator.
+
 ### Splash Screen
 
 During project creation, you'll be prompted to provide a path to a directory containing splash screen images. This is optional - you can press Enter to skip and use default blank white splash screens.
@@ -273,7 +310,7 @@ The generated project includes a production-ready React Native app with:
 - 🧭 React Navigation v7 with Stack and Drawer
 - 📦 Zustand for state management, TanStack Query for server state
 - 🔥 Firebase (optional: Analytics, Messaging, Remote Config)
-- 🗺️ Google Maps integration
+- 🗺️ Maps integration (optional: react-native-maps with optional Google Maps support)
 - 🎨 Modern UI components (Bottom Sheet, Toast, Blur View, etc.)
 - 📱 Native features (Push Notifications, Geolocation, Permissions, etc.)
 - 🛠️ TypeScript, ESLint, Prettier, and development tools

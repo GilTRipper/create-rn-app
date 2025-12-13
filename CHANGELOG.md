@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Maps setup is now optional**: Interactive prompt to configure maps after Firebase setup
+- Maps selection: Choose whether to install react-native-maps or skip maps setup
+- Google Maps configuration: Optional Google Maps setup when react-native-maps is selected
+- Google Maps API key prompt: Option to provide API key during setup or configure later
+- Automatic maps configuration:
+  - When maps are not selected: Removes react-native-maps dependencies and Google Maps code from all files
+  - When react-native-maps is selected but Google Maps is disabled: Keeps react-native-maps, removes Google Maps code (uses Apple Maps on iOS)
+  - When Google Maps is enabled: Configures Podfile, AppDelegate.swift, and AndroidManifest.xml
+  - API key handling: Replaces placeholders when provided, leaves placeholders when skipped
+- Podfile formatting: Ensures proper spacing before `post_install` block when Google Maps is removed
+- Comprehensive maps tests: E2E tests covering all maps configuration scenarios
 - **Firebase is now optional**: Interactive prompt to enable Firebase after environment selection
 - Firebase module selection: Choose which Firebase packages to install (Analytics, Remote Config, Push Notifications/Messaging)
 - Automatic Firebase configuration file handling:
@@ -54,6 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - iOS `AppDelegate.swift` `withModuleName` now correctly replaced with project name (lowercase)
 - iOS Podfile now includes production target (`target '<projectName>' do end`) when multiple environments are created
 - Updated react-native-maps configuration in Podfile to use recommended format: `pod 'react-native-maps/Google'` instead of `:subspecs => ['Google']`
+- Maps dependencies are only added when maps are enabled
+- Google Maps code is conditionally added/removed based on maps selection
+- Podfile formatting now ensures proper spacing before `post_install` when Google Maps pod is removed
 
 ## [1.0.2] - 2025-11-30
 

@@ -99,13 +99,39 @@ async function run() {
           );
         }
 
-        console.log(chalk.yellow.bold("\n🗺️  Setup Google Maps:"));
-        console.log(
-          chalk.white(
-            "  1. Add GOOGLE_MAPS_API_KEY to android/local.properties"
-          )
-        );
-        console.log(chalk.white("  2. Add Google Maps API key to ios/"));
+        if (config.maps?.enabled) {
+          if (config.maps?.provider === "google-maps") {
+            if (config.maps?.googleMapsApiKey) {
+              console.log(
+                chalk.green.bold("\n🗺️  Google Maps: API key configured!")
+              );
+            } else {
+              console.log(chalk.yellow.bold("\n🗺️  Setup Google Maps:"));
+              console.log(
+                chalk.white(
+                  "  1. Add GOOGLE_MAPS_API_KEY to android/local.properties"
+                )
+              );
+              console.log(
+                chalk.white(
+                  "  2. Update Google Maps API key in ios/AppDelegate.swift"
+                )
+              );
+            }
+          } else {
+            console.log(
+              chalk.green.bold(
+                "\n🗺️  Maps: react-native-maps configured (using Apple Maps on iOS)"
+              )
+            );
+          }
+        } else {
+          console.log(
+            chalk.yellow.bold(
+              "\nℹ️  Maps skipped (enable it when creating the project to auto-configure)."
+            )
+          );
+        }
 
         console.log(chalk.cyan.bold("\n🏃 Run the app:\n"));
         console.log(chalk.white(`  ${config.packageManager} run ios`));

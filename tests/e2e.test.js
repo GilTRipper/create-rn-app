@@ -12,6 +12,7 @@ const runFirebaseTests = require("./firebase.test");
 const runAssetsTests = require("./assets.test");
 const runFontsTests = require("./fonts.test");
 const runCliFlagsTests = require("./cli-flags.test");
+const runMapsTests = require("./maps.test");
 
 // Cleanup before starting
 cleanupAll();
@@ -37,47 +38,54 @@ process.on("unhandledRejection", reason => {
   process.exit(1);
 });
 
-log("Starting E2E tests...", "info");
+async function runAllTests() {
+  log("Starting E2E tests...", "info");
 
-// Initialize and create test projects
-log("\n=== Initializing test projects ===", "info");
-initializeProjects();
+  // Initialize and create test projects
+  log("\n=== Initializing test projects ===", "info");
+  initializeProjects();
 
-// Run all test suites
-log("\n=== Running Basic Tests ===", "info");
-runBasicTests();
+  // Run all test suites
+  log("\n=== Running Basic Tests ===", "info");
+  runBasicTests();
 
-log("\n=== Running iOS Tests ===", "info");
-runIosTests();
+  log("\n=== Running iOS Tests ===", "info");
+  runIosTests();
 
-log("\n=== Running Android Tests ===", "info");
-runAndroidTests();
+  log("\n=== Running Android Tests ===", "info");
+  runAndroidTests();
 
-log("\n=== Running Environment Tests ===", "info");
-runEnvironmentTests();
+  log("\n=== Running Environment Tests ===", "info");
+  runEnvironmentTests();
 
-log("\n=== Running Firebase Tests ===", "info");
-runFirebaseTests();
+  log("\n=== Running Firebase Tests ===", "info");
+  runFirebaseTests();
 
-log("\n=== Running Assets Tests ===", "info");
-runAssetsTests();
+  log("\n=== Running Assets Tests ===", "info");
+  runAssetsTests();
 
-log("\n=== Running Fonts Tests ===", "info");
-runFontsTests();
+  log("\n=== Running Fonts Tests ===", "info");
+  runFontsTests();
 
-log("\n=== Running CLI Flags Tests ===", "info");
-runCliFlagsTests();
+  log("\n=== Running CLI Flags Tests ===", "info");
+  runCliFlagsTests();
 
-// Summary
-const { testsPassed, testsFailed } = getTestStats();
-console.log("\n" + "=".repeat(50));
-log(`Tests passed: ${testsPassed}`, "success");
-if (testsFailed > 0) {
-  log(`Tests failed: ${testsFailed}`, "error");
-  cleanupAll();
-  process.exit(1);
-} else {
-  log("All tests passed!", "success");
-  cleanupAll();
-  process.exit(0);
+  log("\n=== Running Maps Tests ===", "info");
+  await runMapsTests();
+
+  // Summary
+  const { testsPassed, testsFailed } = getTestStats();
+  console.log("\n" + "=".repeat(50));
+  log(`Tests passed: ${testsPassed}`, "success");
+  if (testsFailed > 0) {
+    log(`Tests failed: ${testsFailed}`, "error");
+    cleanupAll();
+    process.exit(1);
+  } else {
+    log("All tests passed!", "success");
+    cleanupAll();
+    process.exit(0);
+  }
 }
+
+runAllTests();
