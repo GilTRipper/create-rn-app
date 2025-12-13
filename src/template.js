@@ -720,7 +720,7 @@ async function renameDefaultIosScheme(projectPath, projectName) {
     file =>
       file.includes("HelloWorld") || file.toLowerCase().includes("helloworld")
   );
-
+  
   if (!helloWorldScheme) {
     // Check if there's a scheme that doesn't match projectName
     const baseScheme = schemeFiles[0];
@@ -747,7 +747,7 @@ async function renameDefaultIosScheme(projectPath, projectName) {
 
   const oldPath = path.join(schemesDir, helloWorldScheme);
   const newPath = path.join(schemesDir, `${projectName}.xcscheme`);
-
+  
   if (oldPath !== newPath) {
     await fs.move(oldPath, newPath, { overwrite: true });
 

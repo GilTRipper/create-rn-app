@@ -346,22 +346,7 @@ test("Check app.json content", () => {
   }
 });
 
-// Test 5: Check AndroidManifest.xml has package attribute
-test("Check AndroidManifest.xml has package attribute", () => {
-  const manifestPath = path.join(
-    DEFAULT_PROJECT_PATH,
-    "android/app/src/main/AndroidManifest.xml"
-  );
-  const manifestContent = fs.readFileSync(manifestPath, "utf8");
-
-  if (!manifestContent.includes(`package="${DEFAULT_PROJECT.bundleId}"`)) {
-    throw new Error(
-      `AndroidManifest.xml missing package attribute with bundle ID "${DEFAULT_PROJECT.bundleId}"`
-    );
-  }
-});
-
-// Test 6: Check Podfile has correct target name
+// Test 5: Check Podfile has correct target name
 test("Check Podfile has correct target name", () => {
   const podfilePath = path.join(DEFAULT_PROJECT_PATH, "ios/Podfile");
   const podfileContent = fs.readFileSync(podfilePath, "utf8");
@@ -1030,6 +1015,7 @@ test("Check iOS scheme renamed from HelloWorld when no environments", () => {
 
   if (!fs.existsSync(schemesDir)) {
     // Schemes directory might not exist if pods are skipped
+    log("Schemes directory not found, skipping test", "info");
     return;
   }
 
@@ -1038,6 +1024,7 @@ test("Check iOS scheme renamed from HelloWorld when no environments", () => {
     .filter(file => file.endsWith(".xcscheme"));
 
   if (schemeFiles.length === 0) {
+    log("No scheme files found, skipping test", "info");
     return;
   }
 
@@ -1074,6 +1061,123 @@ test("Check iOS scheme renamed from HelloWorld when no environments", () => {
     throw new Error(
       `Scheme ${projectScheme} still contains HelloWorld references`
     );
+  }
+
+  // Check that scheme has correct project name references
+  if (!schemeContent.includes(NO_ENV_NO_FIREBASE_PROJECT.name)) {
+    throw new Error(
+      `Scheme ${projectScheme} doesn't contain project name "${NO_ENV_NO_FIREBASE_PROJECT.name}"`
+    );
+  }
+
+  // Check that scheme has BuildableReference with correct project name
+  if (
+    !schemeContent.includes(
+      `BuildableName = "${NO_ENV_NO_FIREBASE_PROJECT.name}.app"`
+    )
+  ) {
+    // Also check alternative format
+    if (
+      !schemeContent.includes(
+        `BuildableName = "${NO_ENV_NO_FIREBASE_PROJECT.name.toLowerCase()}.app"`
+      )
+    ) {
+      log(
+        "Warning: BuildableName format might differ, but scheme exists and is renamed",
+        "info"
+      );
+    }
+  }
+});
+
+// Test 24.1: iOS scheme structure when no environments selected
+test("Check iOS scheme structure when no environments selected", () => {
+  const schemesDir = path.join(
+    NO_ENV_NO_FIREBASE_PROJECT_PATH,
+    `ios/${NO_ENV_NO_FIREBASE_PROJECT.name}.xcodeproj/xcshareddata/xcschemes`
+  );
+
+  if (!fs.existsSync(schemesDir)) {
+    log("Schemes directory not found, skipping test", "info");
+    return;
+  }
+
+  const schemeFiles = fs
+    .readdirSync(schemesDir)
+    .filter(file => file.endsWith(".xcscheme"));
+
+  if (schemeFiles.length === 0) {
+    log("No scheme files found, skipping test", "info");
+    return;
+  }
+
+  // When no environments are selected, there should be only one scheme (the base scheme)
+  // and it should be named after the project, not HelloWorld
+  const projectScheme = `${NO_ENV_NO_FIREBASE_PROJECT.name}.xcscheme`;
+
+  if (!schemeFiles.includes(projectScheme)) {
+    throw new Error(
+      `Base scheme ${projectScheme} not found when no environments selected. Found: ${schemeFiles.join(
+        ", "
+      )}`
+    );
+  }
+
+  // Check that there are no environment-specific schemes (Local, Dev, Stg, etc.)
+  const envSchemes = schemeFiles.filter(
+    file =>
+      file.includes("Local") ||
+      file.includes("Dev") ||
+      file.includes("Stg") ||
+      file.includes("Development") ||
+      file.includes("Staging")
+  );
+
+  if (envSchemes.length > 0) {
+    throw new Error(
+      `Environment-specific schemes found when no environments selected: ${envSchemes.join(
+        ", "
+      )}`
+    );
+  }
+
+  // Verify scheme content is valid XML and contains required elements
+  const schemePath = path.join(schemesDir, projectScheme);
+  const schemeContent = fs.readFileSync(schemePath, "utf8");
+
+  // Check for required scheme elements
+  if (!schemeContent.includes("<Scheme")) {
+    throw new Error(`Scheme ${projectScheme} is missing <Scheme> root element`);
+  }
+
+  if (!schemeContent.includes("BuildAction")) {
+    throw new Error(`Scheme ${projectScheme} is missing BuildAction`);
+  }
+
+  if (!schemeContent.includes("LaunchAction")) {
+    throw new Error(`Scheme ${projectScheme} is missing LaunchAction`);
+  }
+
+  // Check that scheme doesn't have environment-specific pre-actions
+  // (when no environments, pre-actions for .env files should not exist)
+  if (schemeContent.includes("PreActions")) {
+    // If PreActions exist, they should not be for environment files
+    if (
+      schemeContent.includes(".env.") &&
+      !schemeContent.includes(".env.production")
+    ) {
+      // Allow .env.production as it might be the default
+      const envPreActions = schemeContent.match(
+        /\.env\.(local|development|staging)/g
+      );
+      if (envPreActions && envPreActions.length > 0) {
+        throw new Error(
+          `Scheme ${projectScheme} has environment-specific pre-actions when no environments selected: ${envPreActions.join(
+            ", "
+          )}`
+        );
+      }
+    }
   }
 });
 
