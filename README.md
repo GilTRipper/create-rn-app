@@ -13,7 +13,7 @@
 
 ---
 
-🚀 CLI tool to create a new React Native app with pre-configured setup including Firebase, Google Maps, Navigation, and more.
+🚀 CLI tool to create a new React Native app with pre-configured setup. Firebase is now optional (enable it during prompts when you need it).
 
 **Stop wasting time on boilerplate.** Get a production-ready React Native app in seconds with all the tools you need already configured.
 
@@ -75,6 +75,47 @@ After dependency prompt, you can opt into environment configuration:
 - `.env.<env>` files are expected; pre-actions copy the chosen one to `.env` for iOS schemes.
 - Android: flavors are generated for the selected envs with matching `project.ext.envConfigFiles` and per-env `src/<env>` folders (assets/res copied from `main`, Kotlin stays in `main/java`).
 - iOS: shared schemes named `<AppName><Env>` with pre-actions copying the corresponding `.env.<env>` file.
+
+### Firebase Setup (Optional)
+
+After environment selection, you'll be prompted to enable Firebase:
+
+1. **Enable Firebase?** - Choose whether to install Firebase
+2. **Select Firebase modules** - Choose which packages you need:
+   - Analytics
+   - Remote Config
+   - Push Notifications (Messaging)
+
+3. **Provide Google Services files**:
+   - **Single environment**: Provide a directory containing both `GoogleService-Info.plist` and `google-services.json`
+   - **Multiple environments**: Provide a base directory with per-environment folders:
+     ```
+     firebase-configs/
+       ├── production/
+       │   └── GoogleService-Info.plist
+       ├── staging/
+       │   └── GoogleService-Info.plist
+       ├── development/
+       │   └── GoogleService-Info.plist
+       ├── production/        (production for both iOS and Android)
+       │   └── google-services.json
+       ├── staging/           (for Android staging)
+       │   └── google-services.json
+       └── development/       (for Android development)
+           └── google-services.json
+     ```
+
+The tool will automatically:
+- Copy iOS `GoogleService-Info.plist` files to `ios/GoogleServices/<env>/` for all environments (including production)
+- Copy Android `google-services.json` files:
+  - Production: `android/app/google-services.json` (root of app folder)
+  - Other environments: `android/app/src/<env>/google-services.json`
+- Configure Podfile with required Firebase pods
+- Update `AppDelegate.swift` with Firebase initialization
+- Add Google Services plugin to Android build files
+- Add selected Firebase dependencies to `package.json`
+
+**Note:** If you skip Firebase during project creation, you can always add it later manually or re-run the generator.
 
 ### Splash Screen
 
@@ -226,7 +267,7 @@ The generated project includes a production-ready React Native app with:
 
 - 🧭 React Navigation v7 with Stack and Drawer
 - 📦 Zustand for state management, TanStack Query for server state
-- 🔥 Firebase (Analytics, Messaging, Remote Config)
+- 🔥 Firebase (optional: Analytics, Messaging, Remote Config)
 - 🗺️ Google Maps integration
 - 🎨 Modern UI components (Bottom Sheet, Toast, Blur View, etc.)
 - 📱 Native features (Push Notifications, Geolocation, Permissions, etc.)

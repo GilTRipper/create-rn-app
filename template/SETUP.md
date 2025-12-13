@@ -2,20 +2,14 @@
 
 After creating your project with `@giltripper/create-rn-app`, follow these steps to complete the setup:
 
-## 1. Firebase Setup
+## 1. Firebase (optional)
 
-### Android
-1. Go to [Firebase Console](https://console.firebase.google.com/)
-2. Create a new project or select existing one
-3. Add an Android app with your bundle identifier (e.g., `com.yourapp`)
-4. Download `google-services.json`
-5. Place it in `android/app/google-services.json`
+If you selected Firebase during project creation, we already hooked up the Google Services files for the environments you provided. Double-check they exist:
 
-### iOS
-1. In the same Firebase project, add an iOS app
-2. Download `GoogleService-Info.plist`
-3. Place it in `ios/YourAppName/GoogleService-Info.plist`
-4. Open Xcode and add it to your project
+- Android: `android/app/google-services.json` (and `android/app/src/<env>/google-services.json` for extra envs)
+- iOS: `ios/<YourAppName>/GoogleService-Info.plist` (and `ios/GoogleServices/<env>/GoogleService-Info.plist` for extra envs)
+
+If you skipped Firebase, you can re-run the generator and enable it later.
 
 ## 2. Google Maps Setup
 
@@ -73,7 +67,7 @@ yarn android
 ## Troubleshooting
 
 ### Android Build Errors
-- Make sure you have added `google-services.json`
+- If using Firebase, verify `google-services.json` is present
 - Check that `GOOGLE_MAPS_API_KEY` is in `local.properties`
 - Clean build: `cd android && ./gradlew clean && cd ..`
 
@@ -88,7 +82,6 @@ yarn android
 
 ## Features Included
 
-- 🔥 Firebase (Analytics, Messaging, Remote Config)
 - 🗺️ Google Maps with directions
 - 🧭 React Navigation (Stack + Drawer)
 - 🎨 React Native Reanimated

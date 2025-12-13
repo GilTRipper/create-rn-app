@@ -79,11 +79,25 @@ async function run() {
           }
         }
 
-        console.log(chalk.yellow.bold("\n📱 Setup Firebase:"));
-        console.log(
-          chalk.white("  1. Add google-services.json to android/app/")
-        );
-        console.log(chalk.white("  2. Add GoogleService-Info.plist to ios/"));
+        if (config.firebase?.enabled) {
+          console.log(chalk.yellow.bold("\n📱 Setup Firebase:"));
+          console.log(
+            chalk.white(
+              "  Firebase enabled. We copied Google config files for selected environments."
+            )
+          );
+          console.log(
+            chalk.white(
+              "  Verify google-services.json and GoogleService-Info.plist are present for each environment."
+            )
+          );
+        } else {
+          console.log(
+            chalk.yellow.bold(
+              "\nℹ️  Firebase skipped (enable it when creating the project to auto-configure)."
+            )
+          );
+        }
 
         console.log(chalk.yellow.bold("\n🗺️  Setup Google Maps:"));
         console.log(

@@ -51,6 +51,429 @@ async function ensureManifestPackage(manifestPath, bundleIdentifier) {
   await fs.writeFile(manifestPath, manifestContent, "utf8");
 }
 
+function getGoogleFilesByEnv(firebaseConfig) {
+  if (!firebaseConfig || !firebaseConfig.filesByEnv) {
+    return {};
+  }
+  return firebaseConfig.filesByEnv;
+}
+
+async function addFirebaseDependencies(
+  projectPath,
+  modules = [],
+  bundleIdentifier
+) {
+  const packageJsonPath = path.join(projectPath, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) return;
+
+  const content = await fs.readFile(packageJsonPath, "utf8");
+  const packageData = JSON.parse(content);
+
+  packageData.dependencies = packageData.dependencies || {};
+  const firebaseDeps = {
+    "@react-native-firebase/app": "^23.5.0",
+  };
+  if (modules.includes("analytics")) {
+    firebaseDeps["@react-native-firebase/analytics"] = "^23.5.0";
+  }
+  if (modules.includes("remote-config")) {
+    firebaseDeps["@react-native-firebase/remote-config"] = "^23.5.0";
+  }
+  if (modules.includes("messaging")) {
+    firebaseDeps["@react-native-firebase/messaging"] = "^23.5.0";
+  }
+
+  packageData.dependencies = { ...packageData.dependencies, ...firebaseDeps };
+
+  // Add analytics debug script only when analytics is selected
+  if (modules.includes("analytics")) {
+    packageData.scripts = packageData.scripts || {};
+    packageData.scripts["android:debug"] =
+      packageData.scripts["android:debug"] ||
+      `react-native run-android && cd android && adb shell setprop debug.firebase.analytics.app ${
+        bundleIdentifier || "com.helloworld"
+      } && cd ..`;
+  }
+
+  await fs.writeFile(
+    packageJsonPath,
+    JSON.stringify(packageData, null, 2) + "\n",
+    "utf8"
+  );
+}
+
+async function ensureGoogleServicesPlugin(projectPath) {
+  const rootBuildGradle = path.join(projectPath, "android/build.gradle");
+  if (await fs.pathExists(rootBuildGradle)) {
+    let content = await fs.readFile(rootBuildGradle, "utf8");
+    if (!content.includes("com.google.gms:google-services")) {
+      content = content.replace(
+        /classpath\("org\.jetbrains\.kotlin:kotlin-gradle-plugin"\)\n/,
+        match =>
+          `${match}        classpath("com.google.gms:google-services:4.4.2")\n`
+      );
+      await fs.writeFile(rootBuildGradle, content, "utf8");
+    }
+  }
+
+  const appBuildGradle = path.join(projectPath, "android/app/build.gradle");
+  if (await fs.pathExists(appBuildGradle)) {
+    let content = await fs.readFile(appBuildGradle, "utf8");
+    if (
+      !/apply plugin:\s*['"]com\.google\.gms\.google-services['"]/.test(content)
+    ) {
+      content = content.replace(
+        /apply plugin:\s*"com\.facebook\.react"\n/,
+        match => `${match}apply plugin: 'com.google.gms.google-services'\n`
+      );
+      await fs.writeFile(appBuildGradle, content, "utf8");
+    }
+  }
+}
+
+async function copyFirebaseGoogleFiles(
+  googleFilesByEnv,
+  projectPath,
+  projectName,
+  hasMultipleEnvs = false
+) {
+  if (!googleFilesByEnv || Object.keys(googleFilesByEnv).length === 0) return;
+
+  for (const [env, files] of Object.entries(googleFilesByEnv)) {
+    const lowerEnv = env.toLowerCase();
+    const isProduction = lowerEnv === "production";
+
+    if (files.androidJson) {
+      if (isProduction) {
+        // Production goes to android/app/ (root of app folder)
+        const androidTargetPath = path.join(
+          projectPath,
+          "android/app/google-services.json"
+        );
+        await fs.copy(files.androidJson, androidTargetPath, {
+          overwrite: true,
+        });
+      } else {
+        // Other environments go to android/app/src/<env>/
+        const androidTargetDir = path.join(
+          projectPath,
+          `android/app/src/${lowerEnv}`
+        );
+        await fs.ensureDir(androidTargetDir);
+        await fs.copy(
+          files.androidJson,
+          path.join(androidTargetDir, "google-services.json"),
+          { overwrite: true }
+        );
+      }
+    }
+
+    if (files.iosPlist) {
+      if (hasMultipleEnvs) {
+        // Multiple environments: go to ios/GoogleServices/<env>/
+        const iosTargetDir = path.join(
+          projectPath,
+          `ios/GoogleServices/${lowerEnv}`
+        );
+        await fs.ensureDir(iosTargetDir);
+        await fs.copy(
+          files.iosPlist,
+          path.join(iosTargetDir, "GoogleService-Info.plist"),
+          {
+            overwrite: true,
+          }
+        );
+      } else {
+        // Single environment: go directly to ios/{projectName}/
+        const iosTargetPath = path.join(
+          projectPath,
+          `ios/${projectName}/GoogleService-Info.plist`
+        );
+        await fs.copy(files.iosPlist, iosTargetPath, { overwrite: true });
+      }
+    }
+  }
+}
+
+async function updatePodfileForFirebase(projectPath, modules = []) {
+  const podfilePath = path.join(projectPath, "ios/Podfile");
+  if (!(await fs.pathExists(podfilePath))) return;
+
+  let content = await fs.readFile(podfilePath, "utf8");
+
+  if (!content.includes("FirebaseCore")) {
+    const basePods = [
+      "  pod 'FirebaseCore', :modular_headers => true",
+      "  pod 'GoogleUtilities', :modular_headers => true",
+    ];
+    if (modules.includes("analytics")) {
+      basePods.push("  $RNFirebaseAnalyticsWithoutAdIdSupport = true");
+    }
+    if (modules.includes("remote-config")) {
+      basePods.push("  pod 'FirebaseRemoteConfig', :modular_headers => true");
+      basePods.push("  pod 'FirebaseABTesting', :modular_headers => true");
+      basePods.push("  pod 'FirebaseInstallations', :modular_headers => true");
+    }
+
+    content = content.replace(
+      /use_react_native!\([\s\S]*?\)\n/,
+      match => `${match}${basePods.join("\n")}\n`
+    );
+  }
+
+  await fs.writeFile(podfilePath, content, "utf8");
+}
+
+async function updateAppDelegateForFirebase(projectPath, projectName) {
+  const appDelegatePath = path.join(
+    projectPath,
+    `ios/${projectName}/AppDelegate.swift`
+  );
+  if (!(await fs.pathExists(appDelegatePath))) return;
+
+  let content = await fs.readFile(appDelegatePath, "utf8");
+
+  if (!content.includes("import Firebase")) {
+    content = content.replace(
+      /import GoogleMaps\n/,
+      match => `${match}import Firebase\n`
+    );
+  }
+
+  if (!content.includes("FirebaseApp.configure()")) {
+    content = content.replace(
+      /GMSServices\.provideAPIKey\("<GOOGLE_MAPS_API_KEY>"\)\n\s+/,
+      match => `${match}FirebaseApp.configure()\n    `
+    );
+  }
+
+  await fs.writeFile(appDelegatePath, content, "utf8");
+}
+
+// Generate a 24-character hex ID for Xcode project objects
+function generateXcodeId() {
+  return Array.from({ length: 24 }, () =>
+    Math.floor(Math.random() * 16).toString(16)
+  )
+    .join("")
+    .toUpperCase();
+}
+
+async function addGoogleServicesToXcodeProject(
+  projectPath,
+  projectName,
+  selectedEnvs = [],
+  hasMultipleEnvs = false
+) {
+  const pbxprojPath = path.join(
+    projectPath,
+    `ios/${projectName}.xcodeproj/project.pbxproj`
+  );
+  if (!(await fs.pathExists(pbxprojPath))) return;
+
+  let content = await fs.readFile(pbxprojPath, "utf8");
+  const mainGroupId = "83CBB9F61A601CBA00E9B192"; // Standard main group ID
+  const projectGroupId =
+    content.match(
+      new RegExp(
+        `${projectName}\\s*=\\s*\\{[^}]*isa = PBXGroup[^}]*children\\s*=\\s*\\(([A-F0-9]{24})`,
+        "m"
+      )
+    )?.[1] ||
+    content
+      .match(
+        new RegExp(
+          `13B07FAE1A68108700A75B9A\\s*/\\*\\s*${projectName.toLowerCase()}\\s*\\*/`,
+          "m"
+        )
+      )?.[0]
+      ?.match(/[A-F0-9]{24}/)?.[0];
+
+  if (hasMultipleEnvs) {
+    // Multiple environments: add GoogleServices folder
+    if (content.includes("path = GoogleServices")) {
+      return; // Already added
+    }
+
+    // Generate IDs
+    const googleServicesId = generateXcodeId();
+
+    // Find mainGroup and add GoogleServices to children
+    const mainGroupRegex = new RegExp(
+      `(${mainGroupId.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      )}\\s*=\\s*\\{[^}]*children\\s*=\\s*\\()`,
+      "m"
+    );
+    if (mainGroupRegex.test(content)) {
+      content = content.replace(
+        mainGroupRegex,
+        `$1${googleServicesId} /* GoogleServices */,\n\t\t\t\t`
+      );
+    }
+
+    // Add PBXFileSystemSynchronizedRootGroup section if it doesn't exist
+    if (!content.includes("PBXFileSystemSynchronizedRootGroup section")) {
+      const synchronizedRootGroupSection = `/* Begin PBXFileSystemSynchronizedRootGroup section */\n\t\t${googleServicesId} /* GoogleServices */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (); explicitFileTypes = {}; explicitFolders = (); path = GoogleServices; sourceTree = "<group>"; };\n/* End PBXFileSystemSynchronizedRootGroup section */\n\n`;
+
+      // Insert before PBXFrameworksBuildPhase section
+      const frameworksSectionRegex =
+        /\/\* Begin PBXFrameworksBuildPhase section \*\//;
+      if (frameworksSectionRegex.test(content)) {
+        content = content.replace(
+          frameworksSectionRegex,
+          synchronizedRootGroupSection +
+            "/* Begin PBXFrameworksBuildPhase section */"
+        );
+      }
+    } else {
+      // Section exists, just add our entry
+      const existingSectionRegex =
+        /(\/\* Begin PBXFileSystemSynchronizedRootGroup section \*\/)/;
+      content = content.replace(
+        existingSectionRegex,
+        `$1\n\t\t${googleServicesId} /* GoogleServices */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (); explicitFileTypes = {}; explicitFolders = (); path = GoogleServices; sourceTree = "<group>"; };`
+      );
+    }
+
+    // Add to fileSystemSynchronizedGroups for all PBXNativeTarget sections
+    // Process in reverse order to avoid position shifts
+
+    // First, update existing fileSystemSynchronizedGroups
+    content = content.replace(
+      /(fileSystemSynchronizedGroups\s*=\s*\()([\s\S]*?)(\))/g,
+      (match, prefix, groups, suffix) => {
+        if (groups.includes("GoogleServices")) {
+          return match; // Already has GoogleServices
+        }
+        const trimmedGroups = groups.trim();
+        if (trimmedGroups === "") {
+          return `${prefix}${googleServicesId} /* GoogleServices */,\n\t\t\t${suffix}`;
+        } else {
+          return `${prefix}${trimmedGroups},\n\t\t\t\t${googleServicesId} /* GoogleServices */,\n\t\t\t${suffix}`;
+        }
+      }
+    );
+
+    // Then, add fileSystemSynchronizedGroups to targets that don't have it
+    // Process from end to beginning to avoid position shifts
+    const productTypeRegex = /productType\s*=\s*"[^"]+";/g;
+    const matches = [];
+    let m;
+    while ((m = productTypeRegex.exec(content)) !== null) {
+      matches.push({ index: m.index, length: m[0].length, fullMatch: m[0] });
+    }
+
+    // Process in reverse order
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const match = matches[i];
+      const productTypePos = match.index;
+      const productTypeEnd = productTypePos + match.length;
+
+      // Find the target block boundaries
+      const beforeTarget = content.substring(0, productTypePos);
+      const targetStart = beforeTarget.lastIndexOf("isa = PBXNativeTarget;");
+      const afterProductType = content.substring(productTypeEnd);
+      const targetEnd = afterProductType.indexOf("\t\t};");
+
+      if (targetStart >= 0 && targetEnd >= 0) {
+        const targetBlock = content.substring(
+          targetStart,
+          productTypeEnd + targetEnd
+        );
+
+        // Check if this target already has fileSystemSynchronizedGroups
+        if (!targetBlock.includes("fileSystemSynchronizedGroups")) {
+          // Add fileSystemSynchronizedGroups after productType
+          content =
+            content.substring(0, productTypeEnd) +
+            `\n\t\t\tfileSystemSynchronizedGroups = (\n\t\t\t\t${googleServicesId} /* GoogleServices */,\n\t\t\t);` +
+            content.substring(productTypeEnd);
+        }
+      }
+    }
+  } else {
+    // Single environment: add GoogleService-Info.plist file directly to project group
+    // Check if file already exists (by name, not by reference)
+    const fileExistsRegex = new RegExp(
+      `GoogleService-Info\\.plist.*path = "${projectName}/GoogleService-Info\\.plist"`,
+      "m"
+    );
+    if (fileExistsRegex.test(content)) {
+      return; // Already added
+    }
+
+    const fileId = generateXcodeId();
+    const buildFileId = generateXcodeId();
+
+    // Find project group by looking for the group that contains the project name
+    // The group ID is typically 13B07FAE1A68108700A75B9A but name is replaced
+    const projectGroupMatch = content.match(
+      new RegExp(
+        `([A-F0-9]{24})\\s*/\\*\\s*${projectName.toLowerCase()}\\s*\\*/\\s*=\\s*\\{[^}]*isa = PBXGroup[^}]*children\\s*=\\s*\\(`,
+        "m"
+      )
+    );
+
+    if (projectGroupMatch) {
+      const projectGroupId = projectGroupMatch[1];
+      const projectGroupRegex = new RegExp(
+        `(${projectGroupId}\\s*/\\*\\s*${projectName.toLowerCase()}\\s*\\*/\\s*=\\s*\\{[^}]*children\\s*=\\s*\\()`,
+        "m"
+      );
+      if (projectGroupRegex.test(content)) {
+        content = content.replace(
+          projectGroupRegex,
+          `$1${fileId} /* GoogleService-Info.plist */,\n\t\t\t\t`
+        );
+      }
+    }
+
+    // Add PBXFileReference
+    const fileReferenceSectionRegex =
+      /(\/\* Begin PBXFileReference section \*\/)/;
+    if (fileReferenceSectionRegex.test(content)) {
+      content = content.replace(
+        fileReferenceSectionRegex,
+        `$1\n\t\t${fileId} /* GoogleService-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = "GoogleService-Info.plist"; path = "${projectName}/GoogleService-Info.plist"; sourceTree = "<group>"; };`
+      );
+    }
+
+    // Add PBXBuildFile
+    const buildFileSectionRegex = /(\/\* Begin PBXBuildFile section \*\/)/;
+    if (buildFileSectionRegex.test(content)) {
+      content = content.replace(
+        buildFileSectionRegex,
+        `$1\n\t\t${buildFileId} /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = ${fileId} /* GoogleService-Info.plist */; };`
+      );
+    }
+
+    // Add to Resources build phase - find by target name pattern
+    const resourcesPhaseRegex = new RegExp(
+      `(13B07F8E1A680F5B00A75B9A\\s*/\\*\\s*Resources\\s*\\*/\\s*=\\s*\\{[\\s\\S]*?files\\s*=\\s*\\([\\s\\S]*?)(\\t\\t\\t\\);\\s*runOnlyForDeploymentPostprocessing)`,
+      "m"
+    );
+    if (resourcesPhaseRegex.test(content)) {
+      content = content.replace(
+        resourcesPhaseRegex,
+        `$1\t\t\t\t${buildFileId} /* GoogleService-Info.plist in Resources */,\n\t\t\t$2`
+      );
+    }
+  }
+
+  await fs.writeFile(pbxprojPath, content, "utf8");
+  if (hasMultipleEnvs) {
+    console.log(
+      chalk.green(`  ✅ Added GoogleServices folder to Xcode project`)
+    );
+  } else {
+    console.log(
+      chalk.green(`  ✅ Added GoogleService-Info.plist to Xcode project`)
+    );
+  }
+}
+
 async function copyAndroidEnvSources(
   selectedEnvs,
   projectPath,
@@ -99,8 +522,7 @@ async function copyAndroidEnvSources(
 
     await copyRecursive(mainSrcPath, envDir);
 
-    const envManifest = path.join(envDir, "AndroidManifest.xml");
-    await ensureManifestPackage(envManifest, bundleIdentifier);
+    // Note: We don't add package attribute to AndroidManifest.xml as it causes errors
   }
 }
 
@@ -246,10 +668,22 @@ async function updateAndroidBuildGradle(
   await fs.writeFile(buildGradlePath, content, "utf8");
 }
 
-function buildPreActionBlock(buildableReference, env) {
+function buildPreActionBlock(buildableReference, env, projectName) {
   const escapedEnv = env.toLowerCase();
   const projectDirVar = "${PROJECT_DIR}";
-  return `  <PreActions>\n      <ExecutionAction\n         ActionType = \"Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction\">\n         <ActionContent\n            title = \"Run Script\"\n            scriptText = \"cp \\&quot;${projectDirVar}/../.env.${escapedEnv}\\&quot; \\&quot;${projectDirVar}/../.env\\&quot;\\n\">\n            <EnvironmentBuildable>\n${buildableReference}\n            </EnvironmentBuildable>\n         </ActionContent>\n      </ExecutionAction>\n   </PreActions>\n`;
+  return `  <PreActions>
+      <ExecutionAction
+         ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+         <ActionContent
+            title = "Run Script"
+            scriptText = "cp &quot;${projectDirVar}/../.env.${escapedEnv}&quot; &quot;${projectDirVar}/../.env&quot;&#10;">
+            <EnvironmentBuildable>
+${buildableReference}
+            </EnvironmentBuildable>
+         </ActionContent>
+      </ExecutionAction>
+   </PreActions>
+`;
 }
 
 function injectPreActionIntoSection(schemeContent, tag, preAction) {
@@ -269,11 +703,74 @@ function injectPreActionIntoSection(schemeContent, tag, preAction) {
   return schemeContent.replace(sectionRegex, section);
 }
 
+async function renameDefaultIosScheme(projectPath, projectName) {
+  const schemesDir = path.join(
+    projectPath,
+    `ios/${projectName}.xcodeproj/xcshareddata/xcschemes`
+  );
+  if (!(await fs.pathExists(schemesDir))) return;
+
+  const schemeFiles = (await fs.readdir(schemesDir)).filter(file =>
+    file.endsWith(".xcscheme")
+  );
+  if (schemeFiles.length === 0) return;
+
+  // Find HelloWorld scheme or any scheme that needs renaming
+  const helloWorldScheme = schemeFiles.find(
+    file =>
+      file.includes("HelloWorld") || file.toLowerCase().includes("helloworld")
+  );
+
+  if (!helloWorldScheme) {
+    // Check if there's a scheme that doesn't match projectName
+    const baseScheme = schemeFiles[0];
+    if (baseScheme && !baseScheme.includes(projectName)) {
+      // Rename it to projectName
+      const oldPath = path.join(schemesDir, baseScheme);
+      const newPath = path.join(schemesDir, `${projectName}.xcscheme`);
+      if (oldPath !== newPath) {
+        await fs.move(oldPath, newPath, { overwrite: true });
+
+        // Update scheme content
+        let schemeContent = await fs.readFile(newPath, "utf8");
+        schemeContent = schemeContent
+          .replace(/HelloWorld/g, projectName)
+          .replace(/helloworld/g, projectName.toLowerCase());
+        await fs.writeFile(newPath, schemeContent, "utf8");
+        console.log(
+          chalk.green(`  ✅ Renamed scheme to ${projectName}.xcscheme`)
+        );
+      }
+    }
+    return;
+  }
+
+  const oldPath = path.join(schemesDir, helloWorldScheme);
+  const newPath = path.join(schemesDir, `${projectName}.xcscheme`);
+
+  if (oldPath !== newPath) {
+    await fs.move(oldPath, newPath, { overwrite: true });
+
+    // Update scheme content
+    let schemeContent = await fs.readFile(newPath, "utf8");
+    schemeContent = schemeContent
+      .replace(/HelloWorld/g, projectName)
+      .replace(/helloworld/g, projectName.toLowerCase());
+    await fs.writeFile(newPath, schemeContent, "utf8");
+    console.log(
+      chalk.green(
+        `  ✅ Renamed scheme from ${helloWorldScheme} to ${projectName}.xcscheme`
+      )
+    );
+  }
+}
+
 async function createIosEnvSchemes(
   selectedEnvs,
   projectPath,
   projectName,
-  buildableRefs = {}
+  buildableRefs = {},
+  googleFilesByEnv = {}
 ) {
   if (!selectedEnvs || selectedEnvs.length < 1) return;
 
@@ -333,7 +830,8 @@ async function createIosEnvSchemes(
   console.log(chalk.blue(`  Updating production scheme: ${desiredBaseScheme}`));
   const prodPreAction = buildPreActionBlock(
     baseBuildableReference,
-    "production"
+    "production",
+    projectName
   );
   let prodSchemeContent = baseSchemeContent.replace(
     /<Scheme[^>]*>/,
@@ -370,7 +868,7 @@ async function createIosEnvSchemes(
     );
 
     // Inject pre-actions into BuildAction (replace existing PreActions)
-    const preAction = buildPreActionBlock(envBuildableRef, env);
+    const preAction = buildPreActionBlock(envBuildableRef, env, projectName);
     schemeContent = injectPreActionIntoSection(
       schemeContent,
       "BuildAction",
@@ -1953,9 +2451,13 @@ async function createApp(config) {
     splashScreenDir,
     appIconDir,
     envSetupSelectedEnvs = [],
+    firebase = {},
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
+  const firebaseEnabled = firebase?.enabled || false;
+  const firebaseModules = firebase?.modules || [];
+  const firebaseFilesByEnv = getGoogleFilesByEnv(firebase?.googleFiles);
 
   // Step 1: Copy template
   const copySpinner = ora("Copying template files...").start();
@@ -2015,16 +2517,13 @@ async function createApp(config) {
       "Hello World": displayName,
     };
 
-    // Files to replace
+    // Files to replace (excluding MainActivity.kt, MainApplication.kt, and build.gradle - they will be handled separately)
     const filesToReplace = [
       "package.json",
       "app.json",
       "index.js",
       "android/settings.gradle",
-      "android/app/build.gradle",
       "android/app/src/main/AndroidManifest.xml",
-      "android/app/src/main/java/com/helloworld/MainActivity.kt",
-      "android/app/src/main/java/com/helloworld/MainApplication.kt",
       "ios/Podfile",
       "ios/HelloWorld/Info.plist",
       "ios/HelloWorld.xcodeproj/project.pbxproj",
@@ -2063,7 +2562,40 @@ async function createApp(config) {
       projectPath,
       "android/app/src/main/AndroidManifest.xml"
     );
-    await ensureManifestPackage(androidManifestPath, bundleIdentifier);
+    // Note: We don't add package attribute to AndroidManifest.xml as it causes errors
+    // The package is determined by the namespace in build.gradle
+
+    // Process build.gradle separately with replacements
+    const buildGradlePath = path.join(projectPath, "android/app/build.gradle");
+    if (await fs.pathExists(buildGradlePath)) {
+      await replaceInFile(buildGradlePath, replacements);
+
+      // Then force correct namespace and applicationId (after all replacements)
+      let buildGradleContent = await fs.readFile(buildGradlePath, "utf8");
+      // Force correct namespace - replace any namespace with correct one
+      buildGradleContent = buildGradleContent.replace(
+        /namespace\s+"[^"]+"/g,
+        `namespace "${bundleIdentifier}"`
+      );
+      // Force correct applicationId in defaultConfig
+      // Find defaultConfig block and replace applicationId inside it
+      const defaultConfigRegex = /(defaultConfig\s*\{)([\s\S]*?)(\})/;
+      const defaultConfigMatch = buildGradleContent.match(defaultConfigRegex);
+      if (defaultConfigMatch) {
+        let defaultConfigContent = defaultConfigMatch[2];
+        // Replace applicationId in defaultConfig block
+        defaultConfigContent = defaultConfigContent.replace(
+          /applicationId\s+"[^"]+"/,
+          `applicationId "${bundleIdentifier}"`
+        );
+        // Reconstruct the defaultConfig block
+        buildGradleContent = buildGradleContent.replace(
+          defaultConfigRegex,
+          `${defaultConfigMatch[1]}${defaultConfigContent}${defaultConfigMatch[3]}`
+        );
+      }
+      await fs.writeFile(buildGradlePath, buildGradleContent, "utf8");
+    }
 
     // Rename iOS folder
     const iosOldPath = path.join(projectPath, "ios/HelloWorld");
@@ -2104,6 +2636,38 @@ async function createApp(config) {
       await fs.ensureDir(path.dirname(androidNewPath));
       // Move the whole package tree into the correctly nested location
       await fs.move(androidOldPath, androidNewPath, { overwrite: true });
+
+      // Replace package name in moved files (MainActivity.kt and MainApplication.kt)
+      const mainActivityPath = path.join(androidNewPath, "MainActivity.kt");
+      const mainApplicationPath = path.join(
+        androidNewPath,
+        "MainApplication.kt"
+      );
+
+      if (await fs.pathExists(mainActivityPath)) {
+        let content = await fs.readFile(mainActivityPath, "utf8");
+        // Force correct package declaration - replace any package declaration with correct one
+        content = content.replace(
+          /^package\s+[^\s\n]+/m,
+          `package ${bundleIdentifier}`
+        );
+        // Replace getMainComponentName to use project name
+        content = content.replace(
+          /getMainComponentName\(\):\s*String\s*=\s*"[^"]+"/,
+          `getMainComponentName(): String = "${projectName.toLowerCase()}"`
+        );
+        await fs.writeFile(mainActivityPath, content, "utf8");
+      }
+
+      if (await fs.pathExists(mainApplicationPath)) {
+        let content = await fs.readFile(mainApplicationPath, "utf8");
+        // Force correct package declaration - replace any package declaration with correct one
+        content = content.replace(
+          /^package\s+[^\s\n]+/m,
+          `package ${bundleIdentifier}`
+        );
+        await fs.writeFile(mainApplicationPath, content, "utf8");
+      }
     }
 
     // Force iOS bundle identifier to the provided value
@@ -2201,7 +2765,8 @@ async function createApp(config) {
         selectedEnvs,
         projectPath,
         projectName,
-        buildableRefs || {}
+        buildableRefs || {},
+        firebaseEnabled ? firebaseFilesByEnv : {}
       );
 
       // Create .env files for all environments
@@ -2214,6 +2779,43 @@ async function createApp(config) {
         projectName,
         bundleIdentifier
       );
+    }
+
+    if (firebaseEnabled) {
+      await addFirebaseDependencies(
+        projectPath,
+        firebaseModules,
+        bundleIdentifier
+      );
+      await ensureGoogleServicesPlugin(projectPath);
+      // Check if we have multiple environments in Firebase config
+      const envsInFirebase = Object.keys(firebaseFilesByEnv || {});
+      const hasMultipleEnvs = envsInFirebase.length > 1;
+      await copyFirebaseGoogleFiles(
+        firebaseFilesByEnv,
+        projectPath,
+        projectName,
+        hasMultipleEnvs
+      );
+      await updatePodfileForFirebase(projectPath, firebaseModules);
+      await updateAppDelegateForFirebase(projectPath, projectName);
+    }
+
+    // Add GoogleServices folder/file to Xcode project (after all targets are created)
+    if (firebaseEnabled) {
+      const envsInFirebase = Object.keys(firebaseFilesByEnv || {});
+      const hasMultipleEnvs = envsInFirebase.length > 1;
+      await addGoogleServicesToXcodeProject(
+        projectPath,
+        projectName,
+        selectedEnvs,
+        hasMultipleEnvs
+      );
+    }
+
+    // Rename default iOS scheme if no environments were selected
+    if (!selectedEnvs || selectedEnvs.length === 0) {
+      await renameDefaultIosScheme(projectPath, projectName);
     }
 
     replaceSpinner.succeed("Placeholders replaced");

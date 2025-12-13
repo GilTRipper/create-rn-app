@@ -4,9 +4,6 @@ import notifee, { EventType } from "@notifee/react-native";
 import Clipboard from "@react-native-clipboard/clipboard";
 import Geolocation from "@react-native-community/geolocation";
 import { useNetInfo } from "@react-native-community/netinfo";
-import { getAnalytics } from "@react-native-firebase/analytics";
-import { getApp } from "@react-native-firebase/app";
-import { getRemoteConfig, setCustomSignals } from "@react-native-firebase/remote-config";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, useColorScheme, View } from "react-native";
 import { Platform } from "react-native";
@@ -30,157 +27,6 @@ import type { BlurViewProps } from "@danielsaraldi/react-native-blur-view";
 import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 
 import type { GeolocationResponse } from "@react-native-community/geolocation";
-import type { FirebaseAnalyticsTypes } from "@react-native-firebase/analytics";
-import type { ReactNativeFirebase } from "@react-native-firebase/app";
-import type { FirebaseRemoteConfigTypes } from "@react-native-firebase/remote-config";
-
-export type RemoteConfigOptions = {
-  signals?: Record<string, string>;
-  userProperties?: Record<string, string>;
-  defaults?: Record<string, number | boolean | string>;
-};
-
-export interface RemoteConfigInterface {
-  getBoolean(value: string, options?: RemoteConfigOptions): Promise<boolean>;
-  getString(value: string, options?: RemoteConfigOptions): Promise<string>;
-  getJSON<T extends Record<string, string | number | boolean | null>>(value: string, options?: RemoteConfigOptions): Promise<T>;
-  getNumber(value: string, options?: RemoteConfigOptions): Promise<number>;
-}
-
-export const useRemoteConfig = () => {
-  const analytics = useAnalytics();
-
-  const remoteConfig = useMemo(() => {
-    const app = getApp();
-    return new RemoteConfig(app, analytics);
-  }, [analytics]);
-
-  return remoteConfig;
-};
-
-export class RemoteConfig implements RemoteConfigInterface {
-  private config: FirebaseRemoteConfigTypes.Module;
-  private analytics?: Analytics;
-
-  public constructor(app: ReactNativeFirebase.FirebaseApp, analytics?: Analytics) {
-    if (analytics) {
-      this.analytics = analytics;
-    }
-
-    this.config = getRemoteConfig(app);
-  }
-
-  private async fetch() {
-    await this.config.fetch(0);
-    await this.config.fetchAndActivate();
-  }
-
-  private async setPropertiesOrSignals(options: RemoteConfigOptions) {
-    const signals = options?.signals;
-    const userProperties = options?.userProperties;
-
-    if (signals) {
-      await setCustomSignals(this.config, signals);
-    }
-
-    if (userProperties && this.analytics) {
-      await this.analytics.setUserProperties(userProperties);
-    }
-  }
-
-  private async setDefaultValue(defaults: Record<string, string | number | boolean>) {
-    await this.config.setDefaults(defaults);
-  }
-
-  private async prepareAndGetValue(value: string, options: RemoteConfigOptions = {}) {
-    if (options.defaults) {
-      await this.setDefaultValue(options.defaults);
-    }
-
-    if (options) {
-      await this.setPropertiesOrSignals(options);
-    }
-
-    await this.fetch();
-
-    const result = this.config.getValue(value);
-
-    return result;
-  }
-
-  public async getJSON<T extends Record<string, string | number | boolean | object | null>>(value: string, options?: RemoteConfigOptions) {
-    const res = await this.prepareAndGetValue(value, options);
-
-    return JSON.parse(res.asString() || "{}") as T;
-  }
-
-  public async getString(value: string, options: RemoteConfigOptions) {
-    const res = await this.prepareAndGetValue(value, options);
-
-    return res.asString();
-  }
-
-  public async getBoolean(value: string, options: RemoteConfigOptions) {
-    const res = await this.prepareAndGetValue(value, options);
-
-    return res.asBoolean();
-  }
-
-  public async getNumber(value: string, options: RemoteConfigOptions) {
-    const res = await this.prepareAndGetValue(value, options);
-
-    return res.asNumber();
-  }
-}
-
-export interface AnalyticsInterface {
-  logEvent(name: string, params: Record<string, unknown>): Promise<void>;
-  setUserProperty(name: string, value: string | null): Promise<void>;
-  setUserProperties(properties: Record<string, string | null>): Promise<void>;
-  setUserId(id: string | null): Promise<void>;
-}
-
-export const AnalyticsEvents = {
-  SCREEN_VIEW: "screen_view",
-  OPEN_RESTAURANT: "open_restaurant",
-  OPEN_PRODUCT: "open_product",
-};
-
-export const useAnalytics = () => {
-  const analytics = useMemo(() => {
-    const app = getApp();
-    return new Analytics(app);
-  }, []);
-
-  return analytics;
-};
-
-export type AnalyticsEvent = keyof typeof AnalyticsEvents;
-export class Analytics implements AnalyticsInterface {
-  private analytics: FirebaseAnalyticsTypes.Module;
-
-  public constructor(app: ReactNativeFirebase.FirebaseApp) {
-    this.analytics = getAnalytics(app);
-  }
-
-  public async logEvent(name: AnalyticsEvent, params?: Record<string, unknown>): Promise<void> {
-    await this.analytics.logEvent(AnalyticsEvents[name], params);
-  }
-
-  public async setUserProperty(name: string, value: string | null): Promise<void> {
-    await this.analytics.setUserProperty(name, value);
-  }
-
-  public async setUserProperties(properties: Record<string, string | null>): Promise<void> {
-    await this.analytics.setUserProperties(properties);
-  }
-
-  public async setUserId(id: string | null): Promise<void> {
-    await this.analytics.setUserId(id);
-  }
-}
-
-// import { notifications } from "~/notifications";
 
 const IS_IOS = Platform.OS === "ios";
 export const useHandlePushNotifications = () => {
@@ -475,8 +321,6 @@ function AppContent() {
     });
   }, []);
 
-  const analytics = useAnalytics();
-  const remoteConfig = useRemoteConfig();
   // return (
   //   <MapView
   //     provider={PROVIDER_GOOGLE}

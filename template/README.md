@@ -457,11 +457,6 @@ src/
 - **Zustand**: Lightweight state management
 - **@tanstack/react-query**: Server state management
 
-### Firebase
-- **@react-native-firebase/analytics**: Analytics tracking
-- **@react-native-firebase/messaging**: Push notifications
-- **@react-native-firebase/remote-config**: Feature flags
-
 ### UI Components
 - **@gorhom/bottom-sheet**: Native bottom sheets
 - **react-native-reanimated**: Smooth animations

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Firebase is now optional**: Interactive prompt to enable Firebase after environment selection
+- Firebase module selection: Choose which Firebase packages to install (Analytics, Remote Config, Push Notifications/Messaging)
+- Automatic Firebase configuration file handling:
+  - Single environment: Prompt for directory containing `GoogleService-Info.plist` and `google-services.json`
+  - Multiple environments: Prompt for base directory with per-environment folders:
+    - iOS: `ios/GoogleServices/<env>/GoogleService-Info.plist` for each environment
+    - Android: Production in `android/app/src/main/google-services.json`, other envs in `android/app/src/<env>/google-services.json`
+- Firebase dependencies are only added when Firebase is enabled
+- Google Services plugin and Podfile configuration are conditionally applied based on Firebase selection
+- iOS scheme pre-actions automatically copy environment-specific `GoogleService-Info.plist` files for non-production environments
 - Environment setup flow: interactive selection of environments (local/development/staging/production) with minimum two selection validation and Cancel option.
 - Automatic Android flavor generation and envConfig mapping per selected environments; copies `src/main` assets/res into `src/<env>` (excluding Kotlin).
 - iOS shared schemes per selected environment (`<AppName><Env>`) with pre-actions copying `.env.<env>` to `.env`.
@@ -57,6 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed app.json displayName replacement in template
 
 ### Changed
+- **Firebase is no longer included by default** - users must opt-in during project creation
+- Firebase dependencies, Podfile entries, and build.gradle plugins are only added when Firebase is explicitly enabled
+- Template no longer includes Firebase code in `App.tsx` by default
 - CLI can now run in fully non-interactive mode with `--yes` flag
 - Bundle identifier and display name can be provided via CLI flags instead of prompts
 - E2E tests now use `--skip-install` to avoid dependency installation issues and focus on project structure validation
@@ -81,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release of @giltripper/create-rn-app CLI
 - React Native 0.82 template with TypeScript
-- Pre-configured Firebase (Analytics, Messaging, Remote Config)
+- Firebase support (Analytics, Messaging, Remote Config) - now optional as of Unreleased
 - Google Maps integration
 - React Navigation (Stack + Drawer)
 - Zustand state management
