@@ -51,6 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed default broken `GoogleService-Info.plist` reference from template (red link in Xcode)
 - `GoogleService-Info.plist` is only added to Xcode project when Firebase is enabled
 - Android `applicationId` in `build.gradle` `defaultConfig` now correctly updates even after other replacements
+- iOS `AppDelegate.swift` `withModuleName` now correctly replaced with project name (lowercase)
+- iOS Podfile now includes production target (`target '<projectName>' do end`) when multiple environments are created
+- Updated react-native-maps configuration in Podfile to use recommended format: `pod 'react-native-maps/Google'` instead of `:subspecs => ['Google']`
 
 ## [1.0.2] - 2025-11-30
 

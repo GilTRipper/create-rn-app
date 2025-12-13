@@ -75,6 +75,7 @@ After dependency prompt, you can opt into environment configuration:
 - `.env.<env>` files are expected; pre-actions copy the chosen one to `.env` for iOS schemes.
 - Android: flavors are generated for the selected envs with matching `project.ext.envConfigFiles` and per-env `src/<env>` folders (assets/res copied from `main`, Kotlin stays in `main/java`).
 - iOS: shared schemes named `<AppName><Env>` with pre-actions copying the corresponding `.env.<env>` file.
+- iOS Podfile: When multiple environments are created, a production target (`target '<projectName>' do end`) is automatically added to the Podfile.
 - **Note**: If you skip environment setup, the default iOS scheme will be automatically renamed from `HelloWorld` to your project name.
 
 ### Firebase Setup (Optional)
