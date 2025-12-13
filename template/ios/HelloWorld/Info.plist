@@ -51,24 +51,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>UIAppFonts</key>
-	<array>
-		<string>GolosText-Black.ttf</string>
-		<string>GolosText-Bold.ttf</string>
-		<string>GolosText-ExtraBold.ttf</string>
-		<string>GolosText-Medium.ttf</string>
-		<string>GolosText-Regular.ttf</string>
-		<string>GolosText-SemiBold.ttf</string>
-		<string>Tajawal-Black.ttf</string>
-		<string>Tajawal-Bold.ttf</string>
-		<string>Tajawal-ExtraBold.ttf</string>
-		<string>Tajawal-ExtraLight.ttf</string>
-		<string>Tajawal-Light.ttf</string>
-		<string>Tajawal-Medium.ttf</string>
-		<string>Tajawal-Regular.ttf</string>
-		<string>Urbanist-Bold.ttf</string>
-		<string>Urbanist-Regular.ttf</string>
-		<string>Urbanist-SemiBold.ttf</string>
-	</array>
 </dict>
 </plist>

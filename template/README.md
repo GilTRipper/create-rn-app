@@ -317,7 +317,7 @@ trofimobile/
 ├── src/                     # Source code (organize your code here)
 ├── assets/                  # Images, fonts, icons
 │   ├── bootsplash/         # Splash screen assets
-│   ├── fonts/              # Custom fonts (Golos Text, Tajawal, Urbanist)
+│   ├── fonts/              # Custom fonts (if provided)
 │   └── icons/              # App icons
 ├── patches/                # pnpm patches for dependencies
 ├── scripts/                # Utility scripts

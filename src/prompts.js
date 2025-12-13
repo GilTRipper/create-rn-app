@@ -130,6 +130,32 @@ async function getPrompts(projectNameArg, options) {
     });
   }
 
+  // Ask about fonts directory if not provided via options and not in non-interactive mode
+  if (!options.fontsDir && !options.yes) {
+    questions.push({
+      type: "input",
+      name: "fontsDir",
+      message: "Path to directory with fonts (optional, press Enter to skip):",
+      default: "",
+      validate: async input => {
+        if (!input || input.trim().length === 0) {
+          return true; // Optional, so empty is valid
+        }
+        const dirPath = path.isAbsolute(input)
+          ? input
+          : path.join(process.cwd(), input);
+        if (!(await fs.pathExists(dirPath))) {
+          return "Directory does not exist";
+        }
+        const stat = await fs.stat(dirPath);
+        if (!stat.isDirectory()) {
+          return "Path is not a directory";
+        }
+        return true;
+      },
+    });
+  }
+
   const answers = await inquirer.prompt(questions);
 
   // Environment setup (interactive only)
@@ -396,6 +422,16 @@ async function getPrompts(projectNameArg, options) {
     appIconDir = path.normalize(appIconDir);
   }
 
+  // Resolve fonts directory path
+  let fontsDir = null;
+  const fontsSource = options.fontsDir || answers.fontsDir;
+  if (fontsSource && fontsSource.trim().length > 0) {
+    fontsDir = path.isAbsolute(fontsSource)
+      ? fontsSource
+      : path.join(process.cwd(), fontsSource);
+    fontsDir = path.normalize(fontsDir);
+  }
+
   return {
     projectName: projectNameArg || answers.projectName,
     bundleIdentifier: options.bundleId || answers.bundleIdentifier,
@@ -410,6 +446,7 @@ async function getPrompts(projectNameArg, options) {
     projectPath,
     splashScreenDir,
     appIconDir,
+    fontsDir,
     envSetupSelectedEnvs,
     firebase: firebaseConfig,
   };

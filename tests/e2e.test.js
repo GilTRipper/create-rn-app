@@ -1354,6 +1354,48 @@ test("Check AppDelegate doesn't have Firebase when Firebase disabled", () => {
   }
 });
 
+// Test 29: AppDelegate withModuleName is replaced correctly
+test("Check AppDelegate withModuleName is replaced correctly", () => {
+  const appDelegatePath = path.join(
+    DEFAULT_PROJECT_PATH,
+    `ios/${DEFAULT_PROJECT.name}/AppDelegate.swift`
+  );
+
+  if (!fs.existsSync(appDelegatePath)) {
+    throw new Error("AppDelegate.swift not found");
+  }
+
+  const content = fs.readFileSync(appDelegatePath, "utf8");
+
+  // Check that withModuleName is present
+  if (!content.includes("withModuleName")) {
+    throw new Error("withModuleName not found in AppDelegate.swift");
+  }
+
+  // Check that "helloworld" is NOT present
+  if (content.includes('withModuleName: "helloworld"')) {
+    throw new Error(
+      `withModuleName still contains "helloworld" instead of project name`
+    );
+  }
+
+  // Check that project name (lowercase) is present in withModuleName
+  const projectNameLower = DEFAULT_PROJECT.name.toLowerCase();
+  const expectedModuleName = `withModuleName: "${projectNameLower}"`;
+  if (!content.includes(expectedModuleName)) {
+    // Also check alternative formats (with or without quotes in different positions)
+    const alternativePattern = new RegExp(
+      `withModuleName:\\s*"${projectNameLower}"`,
+      "g"
+    );
+    if (!alternativePattern.test(content)) {
+      throw new Error(
+        `withModuleName should be "${projectNameLower}" but found: ${content.match(/withModuleName:\s*"[^"]+"/)?.[0] || "not found"}`
+      );
+    }
+  }
+});
+
 // Summary
 console.log('\n' + '='.repeat(50));
 log(`Tests passed: ${testsPassed}`, 'success');

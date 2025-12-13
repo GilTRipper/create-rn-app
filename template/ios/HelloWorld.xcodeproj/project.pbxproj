@@ -7,60 +7,28 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		06BFBB11C75E45CB810458AB /* GolosText-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 08FBA3E33B0C4813AED5F258 /* GolosText-Medium.ttf */; };
 		0C80B921A6F3F58F76C31292 /* libPods-helloworld.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5DCACB8F33CDC322A6C60F78 /* libPods-helloworld.a */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
 		16D93ABA7440422589367228 /* Colors.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F0EC5370EF444C8EA4F66015 /* Colors.xcassets */; };
-		1D692DBCB67E46BD8B1E3CAF /* Tajawal-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D7ABD980E1A44EFE8139DB2E /* Tajawal-Light.ttf */; };
-		291A136A20464C27A7984FBF /* Tajawal-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BD26A19B586F4848B6C38B75 /* Tajawal-Black.ttf */; };
-		3CF32473CCCA4C0699C338B9 /* Urbanist-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4E74B980E26D4584A105C844 /* Urbanist-SemiBold.ttf */; };
-		4F23AEB413F64E728659EA18 /* Urbanist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 78B259EBAEEF41B4BBE6045D /* Urbanist-Regular.ttf */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
-		8151AFB45F2748A9BE9D2EBE /* Urbanist-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 67655BBB0FF74999BFA8A12D /* Urbanist-Bold.ttf */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
-		9C889A2D53BA41AC9DFB0118 /* GolosText-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9DE95DB80FEB4E56A72B1346 /* GolosText-Bold.ttf */; };
-		A16C5247AFA448DF968B6D40 /* Tajawal-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 272D5F995449401AB0092219 /* Tajawal-Regular.ttf */; };
-		B42171AABF1247B6A1DF475A /* GolosText-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AB7EBB3A7F9E4D73BE6CFA55 /* GolosText-Black.ttf */; };
-		B5B765CB086141699BFB853E /* GolosText-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 222B639D739A44E4A7C39785 /* GolosText-SemiBold.ttf */; };
 		D1DEEDBD7A434A7E864BE8BB /* BootSplash.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 1C7A5936486E434F85AF015F /* BootSplash.storyboard */; };
-		D39BD282BFF6489292119522 /* Tajawal-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C0AC89C44ACE4FE6AECF02A4 /* Tajawal-Medium.ttf */; };
-		D634CF989E7C4BF2A7E99775 /* Tajawal-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = AC8EFBB8B60C4E87B34F36CB /* Tajawal-Bold.ttf */; };
-		D73E18E8571C4607B736E9B1 /* GolosText-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4634C831147C4E75838EC87B /* GolosText-ExtraBold.ttf */; };
-		E0D0B65810EE4CE6AD454505 /* Tajawal-ExtraLight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = ED72D0BAC32C42DFABF3E26B /* Tajawal-ExtraLight.ttf */; };
-		F1D5441FB8394D398B79265C /* Tajawal-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D8027E059C474512B101C0D8 /* Tajawal-ExtraBold.ttf */; };
 		F329F5F1103C0B24F0BB2EC4 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
-		F35F2D2A89BC46B680A4B538 /* GolosText-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F144DEA23EAF45B3A532B212 /* GolosText-Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		08FBA3E33B0C4813AED5F258 /* GolosText-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "GolosText-Medium.ttf"; path = "../assets/fonts/GolosText-Medium.ttf"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* helloworld.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = helloworld.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = helloworld/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = helloworld/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = helloworld/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1C7A5936486E434F85AF015F /* BootSplash.storyboard */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = BootSplash.storyboard; path = helloworld/BootSplash.storyboard; sourceTree = "<group>"; };
-		222B639D739A44E4A7C39785 /* GolosText-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "GolosText-SemiBold.ttf"; path = "../assets/fonts/GolosText-SemiBold.ttf"; sourceTree = "<group>"; };
-		272D5F995449401AB0092219 /* Tajawal-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Tajawal-Regular.ttf"; path = "../assets/fonts/Tajawal-Regular.ttf"; sourceTree = "<group>"; };
 		3B4392A12AC88292D35C810B /* Pods-helloworld.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-helloworld.debug.xcconfig"; path = "Target Support Files/Pods-helloworld/Pods-helloworld.debug.xcconfig"; sourceTree = "<group>"; };
-		4634C831147C4E75838EC87B /* GolosText-ExtraBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "GolosText-ExtraBold.ttf"; path = "../assets/fonts/GolosText-ExtraBold.ttf"; sourceTree = "<group>"; };
-		4E74B980E26D4584A105C844 /* Urbanist-SemiBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-SemiBold.ttf"; path = "../assets/fonts/Urbanist-SemiBold.ttf"; sourceTree = "<group>"; };
 		5709B34CF0A7D63546082F79 /* Pods-helloworld.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-helloworld.release.xcconfig"; path = "Target Support Files/Pods-helloworld/Pods-helloworld.release.xcconfig"; sourceTree = "<group>"; };
 		5DCACB8F33CDC322A6C60F78 /* libPods-helloworld.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-helloworld.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		67655BBB0FF74999BFA8A12D /* Urbanist-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-Bold.ttf"; path = "../assets/fonts/Urbanist-Bold.ttf"; sourceTree = "<group>"; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = helloworld/AppDelegate.swift; sourceTree = "<group>"; };
-		78B259EBAEEF41B4BBE6045D /* Urbanist-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Urbanist-Regular.ttf"; path = "../assets/fonts/Urbanist-Regular.ttf"; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = helloworld/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		9DE95DB80FEB4E56A72B1346 /* GolosText-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "GolosText-Bold.ttf"; path = "../assets/fonts/GolosText-Bold.ttf"; sourceTree = "<group>"; };
-		AB7EBB3A7F9E4D73BE6CFA55 /* GolosText-Black.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "GolosText-Black.ttf"; path = "../assets/fonts/GolosText-Black.ttf"; sourceTree = "<group>"; };
-		AC8EFBB8B60C4E87B34F36CB /* Tajawal-Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Tajawal-Bold.ttf"; path = "../assets/fonts/Tajawal-Bold.ttf"; sourceTree = "<group>"; };
-		BD26A19B586F4848B6C38B75 /* Tajawal-Black.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Tajawal-Black.ttf"; path = "../assets/fonts/Tajawal-Black.ttf"; sourceTree = "<group>"; };
-		C0AC89C44ACE4FE6AECF02A4 /* Tajawal-Medium.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Tajawal-Medium.ttf"; path = "../assets/fonts/Tajawal-Medium.ttf"; sourceTree = "<group>"; };
-		D7ABD980E1A44EFE8139DB2E /* Tajawal-Light.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Tajawal-Light.ttf"; path = "../assets/fonts/Tajawal-Light.ttf"; sourceTree = "<group>"; };
-		D8027E059C474512B101C0D8 /* Tajawal-ExtraBold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Tajawal-ExtraBold.ttf"; path = "../assets/fonts/Tajawal-ExtraBold.ttf"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
-		ED72D0BAC32C42DFABF3E26B /* Tajawal-ExtraLight.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "Tajawal-ExtraLight.ttf"; path = "../assets/fonts/Tajawal-ExtraLight.ttf"; sourceTree = "<group>"; };
 		F0EC5370EF444C8EA4F66015 /* Colors.xcassets */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = folder.assetcatalog; name = Colors.xcassets; path = helloworld/Colors.xcassets; sourceTree = "<group>"; };
-		F144DEA23EAF45B3A532B212 /* GolosText-Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = "GolosText-Regular.ttf"; path = "../assets/fonts/GolosText-Regular.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,22 +46,6 @@
 		0A994B0844B5445E81562B86 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				AB7EBB3A7F9E4D73BE6CFA55 /* GolosText-Black.ttf */,
-				9DE95DB80FEB4E56A72B1346 /* GolosText-Bold.ttf */,
-				4634C831147C4E75838EC87B /* GolosText-ExtraBold.ttf */,
-				08FBA3E33B0C4813AED5F258 /* GolosText-Medium.ttf */,
-				F144DEA23EAF45B3A532B212 /* GolosText-Regular.ttf */,
-				222B639D739A44E4A7C39785 /* GolosText-SemiBold.ttf */,
-				BD26A19B586F4848B6C38B75 /* Tajawal-Black.ttf */,
-				AC8EFBB8B60C4E87B34F36CB /* Tajawal-Bold.ttf */,
-				D8027E059C474512B101C0D8 /* Tajawal-ExtraBold.ttf */,
-				ED72D0BAC32C42DFABF3E26B /* Tajawal-ExtraLight.ttf */,
-				D7ABD980E1A44EFE8139DB2E /* Tajawal-Light.ttf */,
-				C0AC89C44ACE4FE6AECF02A4 /* Tajawal-Medium.ttf */,
-				272D5F995449401AB0092219 /* Tajawal-Regular.ttf */,
-				67655BBB0FF74999BFA8A12D /* Urbanist-Bold.ttf */,
-				78B259EBAEEF41B4BBE6045D /* Urbanist-Regular.ttf */,
-				4E74B980E26D4584A105C844 /* Urbanist-SemiBold.ttf */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -226,22 +178,6 @@
 				F329F5F1103C0B24F0BB2EC4 /* PrivacyInfo.xcprivacy in Resources */,
 				D1DEEDBD7A434A7E864BE8BB /* BootSplash.storyboard in Resources */,
 				16D93ABA7440422589367228 /* Colors.xcassets in Resources */,
-				B42171AABF1247B6A1DF475A /* GolosText-Black.ttf in Resources */,
-				9C889A2D53BA41AC9DFB0118 /* GolosText-Bold.ttf in Resources */,
-				D73E18E8571C4607B736E9B1 /* GolosText-ExtraBold.ttf in Resources */,
-				06BFBB11C75E45CB810458AB /* GolosText-Medium.ttf in Resources */,
-				F35F2D2A89BC46B680A4B538 /* GolosText-Regular.ttf in Resources */,
-				B5B765CB086141699BFB853E /* GolosText-SemiBold.ttf in Resources */,
-				291A136A20464C27A7984FBF /* Tajawal-Black.ttf in Resources */,
-				D634CF989E7C4BF2A7E99775 /* Tajawal-Bold.ttf in Resources */,
-				F1D5441FB8394D398B79265C /* Tajawal-ExtraBold.ttf in Resources */,
-				E0D0B65810EE4CE6AD454505 /* Tajawal-ExtraLight.ttf in Resources */,
-				1D692DBCB67E46BD8B1E3CAF /* Tajawal-Light.ttf in Resources */,
-				D39BD282BFF6489292119522 /* Tajawal-Medium.ttf in Resources */,
-				A16C5247AFA448DF968B6D40 /* Tajawal-Regular.ttf in Resources */,
-				8151AFB45F2748A9BE9D2EBE /* Urbanist-Bold.ttf in Resources */,
-				4F23AEB413F64E728659EA18 /* Urbanist-Regular.ttf in Resources */,
-				3CF32473CCCA4C0699C338B9 /* Urbanist-SemiBold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
