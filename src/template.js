@@ -59,6 +59,65 @@ function getGoogleFilesByEnv(firebaseConfig) {
   return firebaseConfig.filesByEnv;
 }
 
+async function copyFirebaseLibModules(projectPath, modules = []) {
+  if (!modules || modules.length === 0) {
+    return;
+  }
+
+  const sourceLibPath = path.join(__dirname, "firebase-lib-modules");
+
+  // Check if source directory exists
+  if (!(await fs.pathExists(sourceLibPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Firebase lib modules directory not found: ${sourceLibPath}. Skipping Firebase lib modules copy.`
+      )
+    );
+    return;
+  }
+
+  const targetLibPath = path.join(projectPath, "src/lib");
+  await fs.ensureDir(targetLibPath);
+
+  // Copy analytics if selected
+  if (modules.includes("analytics")) {
+    const sourceAnalyticsPath = path.join(sourceLibPath, "analytics");
+    const targetAnalyticsPath = path.join(targetLibPath, "analytics");
+
+    if (await fs.pathExists(sourceAnalyticsPath)) {
+      await fs.copy(sourceAnalyticsPath, targetAnalyticsPath, {
+        overwrite: true,
+      });
+      console.log(chalk.green("✅ Copied analytics lib module"));
+    } else {
+      console.log(
+        chalk.yellow(
+          `⚠️  Analytics source directory not found: ${sourceAnalyticsPath}`
+        )
+      );
+    }
+  }
+
+  // Copy remote-config if selected
+  if (modules.includes("remote-config")) {
+    const sourceRemoteConfigPath = path.join(sourceLibPath, "remote-config");
+    const targetRemoteConfigPath = path.join(targetLibPath, "remote-config");
+
+    if (await fs.pathExists(sourceRemoteConfigPath)) {
+      await fs.copy(sourceRemoteConfigPath, targetRemoteConfigPath, {
+        overwrite: true,
+      });
+      console.log(chalk.green("✅ Copied remote-config lib module"));
+    } else {
+      console.log(
+        chalk.yellow(
+          `⚠️  Remote Config source directory not found: ${sourceRemoteConfigPath}`
+        )
+      );
+    }
+  }
+}
+
 async function addFirebaseDependencies(
   projectPath,
   modules = [],
@@ -3552,6 +3611,14 @@ async function createApp(config) {
       );
       await updatePodfileForFirebase(projectPath, firebaseModules);
       await updateAppDelegateForFirebase(projectPath, projectName);
+
+      // Copy Firebase lib modules (analytics, remote-config) if selected
+      const libModules = firebaseModules.filter(
+        module => module === "analytics" || module === "remote-config"
+      );
+      if (libModules.length > 0) {
+        await copyFirebaseLibModules(projectPath, libModules);
+      }
     }
 
     // Add GoogleServices folder/file to Xcode project (after all targets are created)

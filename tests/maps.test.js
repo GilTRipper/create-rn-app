@@ -4,9 +4,8 @@ const { spawn } = require("child_process");
 const { test, log } = require("./test-helpers");
 const testSetup = require("./test-setup");
 
-// Helper function to create project with maps configuration
-// Uses the same approach as createProject in test-setup.js but with interactive prompts for maps
-function createProjectWithMaps({
+// Helper function to create project with maps configuration using stdin
+async function createProjectWithMaps({
   name,
   bundleId,
   displayName,
@@ -17,87 +16,114 @@ function createProjectWithMaps({
   const projectPath = path.join("/tmp", name);
   const packageManager = testSetup.packageManager;
 
-  // Build command (similar to test-setup.js createProject)
-  let command = `create-rn-app ${name} -p ${packageManager} --bundle-id ${bundleId} --display-name "${displayName}" --skip-git --skip-install`;
-
-  // Prepare answers for interactive prompts (answers will be piped via stdin)
-  const answers = [
-    "", // Splash screen - skip
-    "", // App icon - skip
-    "", // Fonts - skip
-    "__CANCEL__", // Environments - Cancel
-    "no", // Firebase - no
-    mapsSelection, // Maps selection
+  // Build command
+  const command = `create-rn-app`;
+  const args = [
+    name,
+    "-p",
+    packageManager,
+    "--bundle-id",
+    bundleId,
+    "--display-name",
+    displayName,
+    "--skip-git",
+    "--skip-install",
   ];
 
+  // Prepare answers for interactive prompts
+  let answers = "";
+
+  // Splash screen? -> skip (Enter)
+  answers += "\n";
+  // App icon? -> skip (Enter)
+  answers += "\n";
+  // Fonts? -> skip (Enter)
+  answers += "\n";
+  // Environments? -> Cancel
+  answers += "__CANCEL__\n";
+  // Firebase? -> no
+  answers += "no\n";
+  // Maps selection
+  answers += `${mapsSelection}\n`;
+
   if (mapsSelection === "react-native-maps") {
-    answers.push(enableGoogleMaps ? "yes" : "no"); // Enable Google Maps?
+    // Enable Google Maps?
+    answers += `${enableGoogleMaps ? "yes" : "no"}\n`;
 
     if (enableGoogleMaps) {
+      // Google Maps API key
       if (googleMapsApiKey) {
-        answers.push(googleMapsApiKey); // Google Maps API key
+        answers += `${googleMapsApiKey}\n`;
       } else {
-        answers.push(""); // Skip API key
+        answers += "\n"; // Skip
       }
     }
   }
 
-  answers.push("yes"); // Overwrite if exists
+  // Overwrite? (if exists) -> yes
+  answers += "yes\n";
 
   log(`Creating project ${name} with maps config...`, "info");
 
   return new Promise((resolve, reject) => {
-    // Use shell: true to properly handle command with arguments
-    const child = spawn(command, [], {
+    let isResolvedOrRejected = false;
+    let timeout = null;
+
+    const cleanup = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+    };
+
+    const child = spawn(command, args, {
       cwd: "/tmp",
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["pipe", "inherit", "inherit"],
       env: { ...process.env, CI: "true" },
       shell: true,
     });
 
-    let stdout = "";
-    let stderr = "";
+    child.stdin.write(answers);
+    child.stdin.end();
 
-    child.stdout.on("data", data => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on("data", data => {
-      stderr += data.toString();
-    });
-
-    // Send answers with delays to let inquirer process each prompt
-    let answerIndex = 0;
-    const sendNextAnswer = () => {
-      if (answerIndex < answers.length) {
-        const answer = answers[answerIndex];
-        child.stdin.write(answer + "\n");
-        answerIndex++;
-        // Wait before sending next answer
-        setTimeout(sendNextAnswer, 200);
-      } else {
-        child.stdin.end();
+    timeout = setTimeout(() => {
+      if (!isResolvedOrRejected && !child.killed) {
+        isResolvedOrRejected = true;
+        child.kill("SIGTERM");
+        setTimeout(() => {
+          if (!child.killed) {
+            child.kill("SIGKILL");
+          }
+        }, 5000);
+        cleanup();
+        reject(new Error("Process timed out after 120 seconds"));
       }
-    };
-
-    // Start sending answers after a delay to let process initialize
-    setTimeout(sendNextAnswer, 300);
+    }, 120000);
 
     child.on("close", code => {
-      if (fs.existsSync(projectPath)) {
-        resolve(projectPath);
-      } else if (code === 0) {
-        reject(new Error("Project directory was not created"));
-      } else {
-        reject(
-          new Error(
-            `Command failed with code ${code}. Stderr: ${stderr.slice(0, 500)}`
-          )
-        );
+      if (isResolvedOrRejected) {
+        return; // Already handled by timeout or error
       }
+      isResolvedOrRejected = true;
+      cleanup();
+
+      if (code !== 0) {
+        reject(new Error(`Command failed with code ${code}`));
+        return;
+      }
+      if (!fs.existsSync(projectPath)) {
+        reject(new Error("Project directory was not created"));
+        return;
+      }
+      resolve(projectPath);
     });
 
     child.on("error", error => {
+      if (isResolvedOrRejected) {
+        return; // Already handled by timeout
+      }
+      isResolvedOrRejected = true;
+      cleanup();
       reject(new Error(`Failed to spawn process: ${error.message}`));
     });
   });
