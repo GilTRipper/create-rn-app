@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Firebase lib modules**: When Analytics and/or Remote Config are selected, corresponding lib modules are automatically created in `src/lib/analytics` and/or `src/lib/remote-config` with TypeScript implementations
 - **Maps setup is now optional**: Interactive prompt to configure maps after Firebase setup
 - Maps selection: Choose whether to install react-native-maps or skip maps setup
 - Google Maps configuration: Optional Google Maps setup when react-native-maps is selected

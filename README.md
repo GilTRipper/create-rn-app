@@ -119,6 +119,10 @@ The tool will automatically:
 - Add Google Services plugin to Android build files
 - Add selected Firebase dependencies to `package.json`
 - Add `GoogleService-Info.plist` to Xcode project (as file reference for single env, or as GoogleServices folder for multiple envs)
+- **Create Firebase lib modules** in `src/lib/`:
+  - **Analytics**: Creates `src/lib/analytics/` with TypeScript implementation including hooks, interfaces, and types
+  - **Remote Config**: Creates `src/lib/remote-config/` with TypeScript implementation including hooks, interfaces, and types
+  - Both modules are fully typed and ready to use in your React Native app
 
 **Note:** If you skip Firebase during project creation, you can always add it later manually or re-run the generator.
 
