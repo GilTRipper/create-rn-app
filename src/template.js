@@ -3256,6 +3256,7 @@ async function createApp(config) {
     envSetupSelectedEnvs = [],
     firebase = {},
     maps = {},
+    zustandStorage = false,
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
@@ -3619,6 +3620,31 @@ async function createApp(config) {
       if (libModules.length > 0) {
         await copyFirebaseLibModules(projectPath, libModules);
       }
+    }
+
+    // Create Zustand storage setup if selected
+    if (zustandStorage) {
+      const libPath = path.join(projectPath, "src/lib");
+      await fs.ensureDir(libPath);
+
+      const storageFilePath = path.join(libPath, "storage.ts");
+      const storageContent = `import { createMMKV } from "react-native-mmkv";
+import type { StateStorage } from "zustand/middleware";
+
+const storage = createMMKV();
+
+export const zustandStorage: StateStorage = {
+  setItem: (name, value) => storage.set(name, value),
+  getItem: name => {
+    const value = storage.getString(name);
+    return value ?? null;
+  },
+  removeItem: name => storage.remove(name),
+};
+`;
+
+      await fs.writeFile(storageFilePath, storageContent, "utf8");
+      console.log(chalk.green("✅ Created Zustand storage setup"));
     }
 
     // Add GoogleServices folder/file to Xcode project (after all targets are created)

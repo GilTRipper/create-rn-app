@@ -13,6 +13,7 @@ const runAssetsTests = require("./assets.test");
 const runFontsTests = require("./fonts.test");
 const runCliFlagsTests = require("./cli-flags.test");
 const runMapsTests = require("./maps.test");
+const runZustandStorageTests = require("./zustand-storage.test");
 
 // Cleanup before starting
 cleanupAll();
@@ -72,6 +73,9 @@ async function runAllTests() {
 
   log("\n=== Running Maps Tests ===", "info");
   await runMapsTests();
+
+  log("\n=== Running Zustand Storage Tests ===", "info");
+  await runZustandStorageTests();
 
   // Summary
   const { testsPassed, testsFailed } = getTestStats();

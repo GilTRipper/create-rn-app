@@ -422,6 +422,22 @@ async function getPrompts(projectNameArg, options) {
     }
   }
 
+  // Zustand storage setup (interactive only, after Maps)
+  let zustandStorageEnabled = false;
+
+  if (!options.yes) {
+    const { enableZustandStorage } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "enableZustandStorage",
+        message: "Do you want to add Zustand storage setup?",
+        default: false,
+      },
+    ]);
+
+    zustandStorageEnabled = enableZustandStorage;
+  }
+
   // Check if directory already exists
   const projectPath = path.join(
     process.cwd(),
@@ -506,6 +522,7 @@ async function getPrompts(projectNameArg, options) {
     envSetupSelectedEnvs,
     firebase: firebaseConfig,
     maps: mapsConfig,
+    zustandStorage: zustandStorageEnabled,
   };
 }
 
