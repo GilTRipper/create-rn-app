@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { spawn } = require("child_process");
 const { test, log } = require("./test-helpers");
 const testSetup = require("./test-setup");
 
@@ -44,39 +44,66 @@ function createProjectWithMaps({
 
   answers.push("yes"); // Overwrite if exists
 
-  // Create input string with newlines
-  const input = answers.join("\n") + "\n";
-
   log(`Creating project ${name} with maps config...`, "info");
 
-  try {
-    // Use execSync with input option (like test-setup.js but with stdin input)
-    execSync(command, {
+  return new Promise((resolve, reject) => {
+    // Use shell: true to properly handle command with arguments
+    const child = spawn(command, [], {
       cwd: "/tmp",
-      input: input,
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, CI: "true" },
-      timeout: 120000,
+      shell: true,
     });
-  } catch (error) {
-    if (fs.existsSync(projectPath)) {
-      log(
-        `Warning: Command failed but project was created. Error: ${error.message}`,
-        "info"
-      );
-    } else {
-      throw new Error(`Failed to create project: ${error.message}`);
-    }
-  }
 
-  if (!fs.existsSync(projectPath)) {
-    throw new Error("Project directory was not created");
-  }
+    let stdout = "";
+    let stderr = "";
 
-  return projectPath;
+    child.stdout.on("data", data => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", data => {
+      stderr += data.toString();
+    });
+
+    // Send answers with delays to let inquirer process each prompt
+    let answerIndex = 0;
+    const sendNextAnswer = () => {
+      if (answerIndex < answers.length) {
+        const answer = answers[answerIndex];
+        child.stdin.write(answer + "\n");
+        answerIndex++;
+        // Wait before sending next answer
+        setTimeout(sendNextAnswer, 200);
+      } else {
+        child.stdin.end();
+      }
+    };
+
+    // Start sending answers after a delay to let process initialize
+    setTimeout(sendNextAnswer, 300);
+
+    child.on("close", code => {
+      if (fs.existsSync(projectPath)) {
+        resolve(projectPath);
+      } else if (code === 0) {
+        reject(new Error("Project directory was not created"));
+      } else {
+        reject(
+          new Error(
+            `Command failed with code ${code}. Stderr: ${stderr.slice(0, 500)}`
+          )
+        );
+      }
+    });
+
+    child.on("error", error => {
+      reject(new Error(`Failed to spawn process: ${error.message}`));
+    });
+  });
 }
 
-module.exports = function runMapsTests() {
+module.exports = async function runMapsTests() {
   const { DEFAULT_PROJECT, DEFAULT_PROJECT_PATH } = testSetup;
 
   // Test 1: Maps not selected - react-native-maps should be removed (using DEFAULT_PROJECT)
@@ -192,8 +219,8 @@ module.exports = function runMapsTests() {
   });
 
   // Test 5: react-native-maps selected, Google Maps not selected - react-native-maps should remain
-  test("Check react-native-maps remains when selected but Google Maps disabled", () => {
-    const projectPath = createProjectWithMaps({
+  test("Check react-native-maps remains when selected but Google Maps disabled", async () => {
+    const projectPath = await createProjectWithMaps({
       name: "test-maps-no-google",
       bundleId: "com.test.mapsnogoogle",
       displayName: "Maps No Google",
@@ -215,8 +242,8 @@ module.exports = function runMapsTests() {
   });
 
   // Test 6: react-native-maps selected, Google Maps not selected - Google Maps should be removed from Podfile
-  test("Check Google Maps removed from Podfile when react-native-maps selected but Google Maps disabled", () => {
-    const projectPath = createProjectWithMaps({
+  test("Check Google Maps removed from Podfile when react-native-maps selected but Google Maps disabled", async () => {
+    const projectPath = await createProjectWithMaps({
       name: "test-maps-no-google-podfile",
       bundleId: "com.test.mapsnogooglepodfile",
       displayName: "Maps No Google Podfile",
@@ -238,8 +265,8 @@ module.exports = function runMapsTests() {
   });
 
   // Test 7: react-native-maps selected, Google Maps not selected - Google Maps should be removed from AppDelegate
-  test("Check Google Maps removed from AppDelegate when react-native-maps selected but Google Maps disabled", () => {
-    const projectPath = createProjectWithMaps({
+  test("Check Google Maps removed from AppDelegate when react-native-maps selected but Google Maps disabled", async () => {
+    const projectPath = await createProjectWithMaps({
       name: "test-maps-no-google-appdelegate",
       bundleId: "com.test.mapsnogoogleappdelegate",
       displayName: "Maps No Google AppDelegate",
@@ -270,8 +297,8 @@ module.exports = function runMapsTests() {
   });
 
   // Test 8: react-native-maps selected, Google Maps selected, no API key - placeholder should remain
-  test("Check Google Maps placeholder remains when API key not provided", () => {
-    const projectPath = createProjectWithMaps({
+  test("Check Google Maps placeholder remains when API key not provided", async () => {
+    const projectPath = await createProjectWithMaps({
       name: "test-maps-google-no-key",
       bundleId: "com.test.mapsgooglenokey",
       displayName: "Maps Google No Key",
@@ -314,9 +341,9 @@ module.exports = function runMapsTests() {
   });
 
   // Test 9: react-native-maps selected, Google Maps selected, API key provided - should be replaced
-  test("Check Google Maps API key replaced when provided", () => {
+  test("Check Google Maps API key replaced when provided", async () => {
     const testApiKey = "TEST_API_KEY_12345";
-    const projectPath = createProjectWithMaps({
+    const projectPath = await createProjectWithMaps({
       name: "test-maps-google-with-key",
       bundleId: "com.test.mapsgooglewithkey",
       displayName: "Maps Google With Key",
@@ -373,8 +400,8 @@ module.exports = function runMapsTests() {
   });
 
   // Test 10: react-native-maps selected, Google Maps selected - Podfile should have Google Maps pod
-  test("Check Podfile has Google Maps pod when Google Maps enabled", () => {
-    const projectPath = createProjectWithMaps({
+  test("Check Podfile has Google Maps pod when Google Maps enabled", async () => {
+    const projectPath = await createProjectWithMaps({
       name: "test-maps-google-podfile",
       bundleId: "com.test.mapsgooglepodfile",
       displayName: "Maps Google Podfile",
@@ -396,8 +423,8 @@ module.exports = function runMapsTests() {
   });
 
   // Test 11: react-native-maps selected, Google Maps selected - AppDelegate should have Google Maps import
-  test("Check AppDelegate has Google Maps import when Google Maps enabled", () => {
-    const projectPath = createProjectWithMaps({
+  test("Check AppDelegate has Google Maps import when Google Maps enabled", async () => {
+    const projectPath = await createProjectWithMaps({
       name: "test-maps-google-appdelegate",
       bundleId: "com.test.mapsgoogleappdelegate",
       displayName: "Maps Google AppDelegate",
