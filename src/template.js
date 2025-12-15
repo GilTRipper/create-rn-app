@@ -3195,7 +3195,7 @@ async function addScriptsToPackageJson(
     } else {
       packageData.scripts[
         `android:${scriptEnv}`
-      ] = `react-native run-android --mode=${lowerEnv}debug --appId=${bundleIdentifier}.debug`;
+      ] = `react-native run-android --mode=${lowerEnv}debug --appId=${bundleIdentifier}`;
       packageData.scripts[
         `android:${scriptEnv}-release`
       ] = `react-native run-android --mode=${lowerEnv}release`;
