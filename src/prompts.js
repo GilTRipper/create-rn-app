@@ -438,6 +438,53 @@ async function getPrompts(projectNameArg, options) {
     zustandStorageEnabled = enableZustandStorage;
   }
 
+  // Navigation setup (interactive only, after Zustand storage)
+  // 1) Ask whether to set up navigation at all
+  // 2) If yes – choose between:
+  //    - without-auth: only AppNavigator, no auth store/folder
+  //    - with-auth: RootNavigator + AuthNavigator + auth store
+  let navigationMode = "none";
+
+  if (!options.yes) {
+    const { enableNavigation } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "enableNavigation",
+        message: "Do you want to set up base navigation?",
+        default: true,
+      },
+    ]);
+
+    if (enableNavigation) {
+      const { navigationVariant } = await inquirer.prompt([
+        {
+          type: "list",
+          name: "navigationVariant",
+          message: "Choose navigation variant:",
+          choices: [
+            {
+              name: "Without auth (only AppNavigator, no auth folder)",
+              value: "app-only",
+            },
+            {
+              name: "With auth (RootNavigator + AuthNavigator + auth store)",
+              value: "with-auth",
+            },
+          ],
+          default: "app-only",
+        },
+      ]);
+
+      navigationMode = navigationVariant;
+    } else {
+      navigationMode = "none";
+    }
+  } else {
+    // In non-interactive/--yes mode we don't break behaviour:
+    // keep default "none" so template stays as-is.
+    navigationMode = "none";
+  }
+
   // Check if directory already exists
   const projectPath = path.join(
     process.cwd(),
@@ -523,6 +570,7 @@ async function getPrompts(projectNameArg, options) {
     firebase: firebaseConfig,
     maps: mapsConfig,
     zustandStorage: zustandStorageEnabled,
+    navigationMode,
   };
 }
 

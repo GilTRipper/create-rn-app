@@ -118,6 +118,132 @@ async function copyFirebaseLibModules(projectPath, modules = []) {
   }
 }
 
+async function copyAuthTemplate(projectPath) {
+  const sourceAuthPath = path.join(__dirname, "../template-presets/auth");
+
+  // Check if source directory exists
+  if (!(await fs.pathExists(sourceAuthPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Auth template directory not found: ${sourceAuthPath}. Skipping auth template copy.`
+      )
+    );
+    return;
+  }
+
+  const targetAuthPath = path.join(projectPath, "src/auth");
+  await fs.ensureDir(path.dirname(targetAuthPath));
+
+  if (await fs.pathExists(sourceAuthPath)) {
+    await fs.copy(sourceAuthPath, targetAuthPath, {
+      overwrite: true,
+    });
+    console.log(chalk.green("✅ Copied auth template"));
+  } else {
+    console.log(
+      chalk.yellow(`⚠️  Auth source directory not found: ${sourceAuthPath}`)
+    );
+  }
+}
+
+async function copyNavigationTemplate(projectPath, navigationMode) {
+  const sourceNavigationPath = path.join(
+    __dirname,
+    "../template-presets/navigation"
+  );
+
+  // Check if source directory exists
+  if (!(await fs.pathExists(sourceNavigationPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Navigation template directory not found: ${sourceNavigationPath}. Skipping navigation template copy.`
+      )
+    );
+    return;
+  }
+
+  const targetNavigationPath = path.join(projectPath, "src/ui/navigation");
+  await fs.ensureDir(path.dirname(targetNavigationPath));
+
+  if (navigationMode === "with-auth") {
+    // Copy full navigation (RootNavigator, AuthNavigator, AppNavigator, types, index)
+    // Filter out any files with suffixes like -app-only, -with-auth, etc.
+    if (await fs.pathExists(sourceNavigationPath)) {
+      await fs.copy(sourceNavigationPath, targetNavigationPath, {
+        overwrite: true,
+        filter: src => {
+          const fileName = path.basename(src);
+          // Exclude files with suffixes like -app-only, -with-auth, etc.
+          if (
+            fileName.includes("-app-only") ||
+            fileName.includes("-with-auth")
+          ) {
+            return false;
+          }
+          return true;
+        },
+      });
+      console.log(
+        chalk.green("✅ Copied full navigation template (with auth)")
+      );
+    }
+  } else if (navigationMode === "app-only") {
+    // Copy only AppNavigator and generate app-only versions of types and index
+    await fs.ensureDir(targetNavigationPath);
+
+    // Copy AppNavigator.tsx
+    const appNavigatorSource = path.join(
+      sourceNavigationPath,
+      "AppNavigator.tsx"
+    );
+    const appNavigatorTarget = path.join(
+      targetNavigationPath,
+      "AppNavigator.tsx"
+    );
+    if (await fs.pathExists(appNavigatorSource)) {
+      await fs.copy(appNavigatorSource, appNavigatorTarget, {
+        overwrite: true,
+      });
+    }
+
+    // Generate types.ts for app-only (without RootRoutes and AuthRoutes)
+    const typesTarget = path.join(targetNavigationPath, "types.ts");
+    const typesContent = `import type { RouteProp } from "@react-navigation/native";
+import type {
+  NativeStackNavigationProp,
+  NativeStackScreenProps,
+} from "@react-navigation/native-stack";
+
+export const enum AppRoutes {
+  HOME = "HOME",
+}
+
+export type AppStackParamList = {
+  [AppRoutes.HOME]: undefined;
+};
+
+export type AppStackRouteProp<T extends keyof AppStackParamList = AppRoutes> =
+  RouteProp<AppStackParamList, T>;
+export type AppStackScreenProps<T extends keyof AppStackParamList = AppRoutes> =
+  NativeStackScreenProps<AppStackParamList, T>;
+export type AppStackNavigationProp<
+  T extends keyof AppStackParamList = AppRoutes
+> = NativeStackNavigationProp<AppStackParamList, T>;
+`;
+    await fs.writeFile(typesTarget, typesContent, "utf8");
+
+    // Generate index.ts for app-only (export only AppNavigator)
+    const indexTarget = path.join(targetNavigationPath, "index.ts");
+    const indexContent = `export { AppNavigator } from "./AppNavigator";
+`;
+    await fs.writeFile(indexTarget, indexContent, "utf8");
+
+    console.log(
+      chalk.green("✅ Copied navigation template (app-only, no auth)")
+    );
+  }
+}
+
 async function addFirebaseDependencies(
   projectPath,
   modules = [],
@@ -3257,6 +3383,7 @@ async function createApp(config) {
     firebase = {},
     maps = {},
     zustandStorage = false,
+    navigationMode = "none",
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
@@ -3622,13 +3749,18 @@ async function createApp(config) {
       }
     }
 
-    // Create Zustand storage setup if selected
-    if (zustandStorage) {
+    // Create Zustand storage setup if selected OR if navigation with auth is enabled
+    // (auth store requires zustandStorage)
+    const needsZustandStorage =
+      zustandStorage || navigationMode === "with-auth";
+    if (needsZustandStorage) {
       const libPath = path.join(projectPath, "src/lib");
       await fs.ensureDir(libPath);
 
       const storageFilePath = path.join(libPath, "storage.ts");
-      const storageContent = `import { createMMKV } from "react-native-mmkv";
+      // Check if storage already exists (might have been created earlier)
+      if (!(await fs.pathExists(storageFilePath))) {
+        const storageContent = `import { createMMKV } from "react-native-mmkv";
 import type { StateStorage } from "zustand/middleware";
 
 const storage = createMMKV();
@@ -3643,9 +3775,37 @@ export const zustandStorage: StateStorage = {
 };
 `;
 
-      await fs.writeFile(storageFilePath, storageContent, "utf8");
-      console.log(chalk.green("✅ Created Zustand storage setup"));
+        await fs.writeFile(storageFilePath, storageContent, "utf8");
+        if (navigationMode === "with-auth" && !zustandStorage) {
+          console.log(
+            chalk.green(
+              "✅ Created Zustand storage setup (required for auth navigation)"
+            )
+          );
+        } else {
+          console.log(chalk.green("✅ Created Zustand storage setup"));
+        }
+      } else if (navigationMode === "with-auth") {
+        // Storage already exists, but verify it's correct for auth
+        console.log(
+          chalk.green(
+            "✅ Zustand storage already exists (required for auth navigation)"
+          )
+        );
+      }
     }
+
+    // Navigation and auth setup based on navigationMode
+    if (navigationMode === "with-auth") {
+      // Copy auth template (store, types, etc.)
+      await copyAuthTemplate(projectPath);
+      // Copy full navigation template (RootNavigator, AuthNavigator, AppNavigator)
+      await copyNavigationTemplate(projectPath, "with-auth");
+    } else if (navigationMode === "app-only") {
+      // Copy only AppNavigator (no auth folder, no RootNavigator/AuthNavigator)
+      await copyNavigationTemplate(projectPath, "app-only");
+    }
+    // If navigationMode === "none", do nothing (leave template as-is)
 
     // Add GoogleServices folder/file to Xcode project (after all targets are created)
     if (firebaseEnabled) {

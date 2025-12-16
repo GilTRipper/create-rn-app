@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Navigation & Auth Setup**: Interactive prompt to configure navigation structure after maps setup
+- Navigation selection: Choose whether to set up base navigation or skip
+- Navigation variants:
+  - **Without auth**: Creates `AppNavigator` only with simplified types (no auth folder)
+  - **With auth**: Creates full navigation setup with `RootNavigator`, `AuthNavigator`, `AppNavigator`, and auth store
+- Auth store: Zustand-based authentication state management with persistence (when "With auth" is selected)
+- Automatic Zustand storage creation: When "With auth" navigation is selected, Zustand storage is automatically created (required for auth store persistence)
+- Navigation templates: Pre-configured navigation structure in `template-presets/navigation` and `template-presets/auth`
 - **Firebase lib modules**: When Analytics and/or Remote Config are selected, corresponding lib modules are automatically created in `src/lib/analytics` and/or `src/lib/remote-config` with TypeScript implementations
 - **Maps setup is now optional**: Interactive prompt to configure maps after Firebase setup
 - Maps selection: Choose whether to install react-native-maps or skip maps setup

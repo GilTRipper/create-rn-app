@@ -163,6 +163,47 @@ The tool will automatically:
 
 **Note:** If you skip maps during project creation, you can always add them later manually or re-run the generator.
 
+### Navigation & Auth Setup (Optional)
+
+After maps setup, you'll be prompted to configure navigation:
+
+1. **Do you want to set up base navigation?** - Choose whether to set up navigation structure
+2. **If you selected navigation**, you'll be asked to choose a variant:
+   - **Without auth (only AppNavigator, no auth folder)** - Simple navigation setup with just `AppNavigator` for apps that don't need authentication
+   - **With auth (RootNavigator + AuthNavigator + auth store)** - Full navigation setup with authentication flow including:
+     - `RootNavigator` - Root navigator that switches between auth and app screens based on authorization state
+     - `AuthNavigator` - Authentication flow navigator (Login, Register screens)
+     - `AppNavigator` - Main app navigator for authenticated users
+     - Auth store - Zustand-based authentication state management
+
+The tool will automatically:
+- **When navigation is not selected:**
+  - No navigation files are created (you can add navigation manually later)
+
+- **When "Without auth" is selected:**
+  - Creates `src/ui/navigation/` with:
+    - `AppNavigator.tsx` - Main app navigator
+    - `types.ts` - Navigation types (only AppRoutes, no RootRoutes or AuthRoutes)
+    - `index.ts` - Exports AppNavigator
+  - No auth folder is created
+
+- **When "With auth" is selected:**
+  - Creates `src/auth/` with:
+    - `store/index.ts` - Zustand auth store with persistence
+    - `types.ts` - Auth state types
+    - `index.ts` - Auth exports
+  - Creates `src/ui/navigation/` with:
+    - `RootNavigator.tsx` - Root navigator that switches based on auth state
+    - `AuthNavigator.tsx` - Auth flow navigator (Login, Register)
+    - `AppNavigator.tsx` - Main app navigator
+    - `types.ts` - Complete navigation types (RootRoutes, AuthRoutes, AppRoutes)
+    - `index.ts` - Exports RootNavigator
+  - Automatically creates `src/lib/storage.ts` (Zustand storage) if not already present (required for auth store persistence)
+
+**Note:** If you select "With auth" navigation, Zustand storage will be automatically set up even if you didn't select it separately, as it's required for the auth store.
+
+**Note:** If you skip navigation during project creation, you can always add it later manually or re-run the generator.
+
 ### Splash Screen
 
 During project creation, you'll be prompted to provide a path to a directory containing splash screen images. This is optional - you can press Enter to skip and use default blank white splash screens.
@@ -311,7 +352,8 @@ The tool will automatically copy and configure app icons for both iOS and Androi
 
 The generated project includes a production-ready React Native app with:
 
-- 🧭 React Navigation v7 with Stack and Drawer
+- 🧭 React Navigation v7 with Stack and Drawer (optional: with or without auth flow)
+- 🔐 Authentication setup (optional: Zustand-based auth store with navigation flow)
 - 📦 Zustand for state management, TanStack Query for server state
 - 🔥 Firebase (optional: Analytics, Messaging, Remote Config)
 - 🗺️ Maps integration (optional: react-native-maps with optional Google Maps support)
