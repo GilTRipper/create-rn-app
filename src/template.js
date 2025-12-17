@@ -244,6 +244,48 @@ export type AppStackNavigationProp<
   }
 }
 
+async function updateAppTsxForNavigation(projectPath, navigationMode) {
+  const appTsxPath = path.join(projectPath, "App.tsx");
+
+  if (!(await fs.pathExists(appTsxPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  App.tsx not found: ${appTsxPath}. Skipping App.tsx update.`
+      )
+    );
+    return;
+  }
+
+  if (navigationMode === "with-auth") {
+    // Use RootNavigator (full navigation with auth)
+    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+import { RootNavigator } from "~/ui/navigation";
+
+export const App = () => (
+  <NavigationContainer>
+    <RootNavigator />
+  </NavigationContainer>
+);
+`;
+    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
+    console.log(chalk.green("✅ Updated App.tsx for navigation with auth"));
+  } else if (navigationMode === "app-only") {
+    // Use AppNavigator directly (no auth)
+    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+import { AppNavigator } from "~/ui/navigation";
+
+export const App = () => (
+  <NavigationContainer>
+    <AppNavigator />
+  </NavigationContainer>
+);
+`;
+    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
+    console.log(chalk.green("✅ Updated App.tsx for app-only navigation"));
+  }
+  // If navigationMode === "none", leave App.tsx as-is
+}
+
 async function addFirebaseDependencies(
   projectPath,
   modules = [],
@@ -3801,9 +3843,13 @@ export const zustandStorage: StateStorage = {
       await copyAuthTemplate(projectPath);
       // Copy full navigation template (RootNavigator, AuthNavigator, AppNavigator)
       await copyNavigationTemplate(projectPath, "with-auth");
+      // Update App.tsx to use RootNavigator
+      await updateAppTsxForNavigation(projectPath, "with-auth");
     } else if (navigationMode === "app-only") {
       // Copy only AppNavigator (no auth folder, no RootNavigator/AuthNavigator)
       await copyNavigationTemplate(projectPath, "app-only");
+      // Update App.tsx to use AppNavigator
+      await updateAppTsxForNavigation(projectPath, "app-only");
     }
     // If navigationMode === "none", do nothing (leave template as-is)
 
