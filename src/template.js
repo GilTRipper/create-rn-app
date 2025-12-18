@@ -244,7 +244,242 @@ export type AppStackNavigationProp<
   }
 }
 
-async function updateAppTsxForNavigation(projectPath, navigationMode) {
+async function addLocalizationDependencies(projectPath) {
+  const packageJsonPath = path.join(projectPath, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) return;
+
+  const content = await fs.readFile(packageJsonPath, "utf8");
+  const packageData = JSON.parse(content);
+
+  packageData.dependencies = packageData.dependencies || {};
+
+  // Versions aligned with lepimvarim
+  const localizationDeps = {
+    i18next: "^25.7.3",
+    "i18next-icu": "^2.4.1",
+    "react-i18next": "^16.5.0",
+  };
+
+  packageData.dependencies = {
+    ...packageData.dependencies,
+    ...localizationDeps,
+  };
+
+  await fs.writeFile(
+    packageJsonPath,
+    JSON.stringify(packageData, null, 2) + "\n",
+    "utf8"
+  );
+}
+
+async function copyLocalizationTemplate(projectPath) {
+  const sourceLocalizationPath = path.join(
+    __dirname,
+    "../template-presets/localization"
+  );
+
+  if (!(await fs.pathExists(sourceLocalizationPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Localization template directory not found: ${sourceLocalizationPath}. Skipping localization template copy.`
+      )
+    );
+    return;
+  }
+
+  const targetLocalizationPath = path.join(projectPath, "src/lib/localization");
+  await fs.ensureDir(path.dirname(targetLocalizationPath));
+
+  await fs.copy(sourceLocalizationPath, targetLocalizationPath, {
+    overwrite: true,
+  });
+  console.log(chalk.green("✅ Copied localization template"));
+}
+
+async function configureLocalization(projectPath, defaultLanguage) {
+  const lang = String(defaultLanguage || "ru").trim();
+  const targetLocalizationPath = path.join(projectPath, "src/lib/localization");
+  const languagesDir = path.join(targetLocalizationPath, "languages");
+  await fs.ensureDir(languagesDir);
+
+  // Create first language file in languages/ (based on selected default language)
+  const languageFilePath = path.join(languagesDir, `${lang}.json`);
+  const languageJson = {
+    global: {
+      hello: lang.toLowerCase().startsWith("ru") ? "Привет" : "Hello",
+    },
+  };
+
+  await fs.writeFile(
+    languageFilePath,
+    JSON.stringify(languageJson, null, 2) + "\n",
+    "utf8"
+  );
+
+  // Remove default ru.json from preset if different (or keep only selected file)
+  const presetRuPath = path.join(languagesDir, "ru.json");
+  if (await fs.pathExists(presetRuPath)) {
+    if (lang !== "ru") {
+      await fs.remove(presetRuPath);
+    }
+  }
+
+  // Rewrite provider.tsx / types.ts / store to use selected default language
+  const providerPath = path.join(targetLocalizationPath, "provider.tsx");
+  const typesPath = path.join(targetLocalizationPath, "types.ts");
+  const storePath = path.join(targetLocalizationPath, "store/index.ts");
+
+  const providerContent = `import React, { createContext, useContext } from "react";
+import i18n from "i18next";
+import ICU from "i18next-icu";
+import { initReactI18next, useTranslation } from "react-i18next";
+import { useLocalize } from "react-native-localize";
+import translations from "./languages/${lang}.json";
+import { useLocalizationStore } from "./store";
+import type { I18nContextProps, LocalizationContextProps, TranslationComponents } from "./types";
+import type { ReactNode } from "react";
+
+const LocalizationContext = createContext<LocalizationContextProps | undefined>(undefined);
+
+const parseWithComponents = (str: string, components: TranslationComponents): ReactNode => {
+  const regex = /<(\\w+)>(.*?)<\\/\\1>/gs;
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of str.matchAll(regex)) {
+    const [fullMatch, tagName, innerContent] = match;
+    const index = match.index!;
+
+    if (index > lastIndex) {
+      parts.push(str.slice(lastIndex, index));
+    }
+
+    const inner = parseWithComponents(innerContent, components);
+
+    parts.push(components[tagName]?.(inner) ?? fullMatch);
+
+    lastIndex = index + fullMatch.length;
+  }
+
+  if (lastIndex < str.length) {
+    parts.push(str.slice(lastIndex));
+  }
+
+  return parts.length === 1 ? parts[0] : parts;
+};
+
+// Don't forget to wrap your app with this provider
+export const LocalizationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { t: rawT } = useTranslation();
+
+  const { language, setLanguage } = useLocalizationStore();
+  const { getLocales } = useLocalize();
+
+  const rich: I18nContextProps["rich"] = (key, components, options?) => {
+    const str = rawT(key, options);
+    return parseWithComponents(str, components);
+  };
+
+  const initLocalization = async () => {
+    let lng = language;
+
+    if (!lng) {
+      lng = getLocales()[0].languageCode;
+      setLanguage(lng);
+    }
+
+    await i18n.use(initReactI18next).use(ICU).init({
+      // add all languages your app supports (from languages folder)
+      resources: { ${JSON.stringify(lang)}: { translation: translations } },
+      lng,
+      fallbackLng: ${JSON.stringify(lang)},
+      interpolation: { escapeValue: false },
+    });
+  };
+
+  const changeLanguage = async (newLanguage: string) => {
+    await i18n.changeLanguage(newLanguage);
+    setLanguage(newLanguage);
+  };
+
+  return (
+    <LocalizationContext.Provider value={{ t: rawT, rich, initLocalization, changeLanguage }}>{children}</LocalizationContext.Provider>
+  );
+};
+
+export const useLocalization = (): LocalizationContextProps => {
+  const context = useContext(LocalizationContext);
+
+  if (!context) {
+    throw new Error("useLocalization must be used within LocalizationProvider");
+  }
+
+  return context;
+};
+`;
+
+  const typesContent = `import type { ReactNode } from "react";
+import type translations from "./languages/${lang}.json";
+
+export type Join<K, P> = K extends string | number ? (P extends string | number ? \`\${K}.\${P}\` : never) : never;
+export type FinalPaths<T> = T extends object
+  ? {
+      [K in keyof T & (string | number)]: T[K] extends object ? Join<K, FinalPaths<T[K]>> : K;
+    }[keyof T & (string | number)]
+  : never;
+export type TranslationKey = FinalPaths<typeof translations>;
+
+export type TranslationOptions = Record<string, string | number> | undefined;
+
+export type TranslationComponents = Record<string, (_: ReactNode) => ReactNode>;
+
+export type I18nContextProps = {
+  t: (key: TranslationKey, options?: TranslationOptions) => string;
+  rich: (key: TranslationKey, components: TranslationComponents, options?: TranslationOptions) => ReactNode;
+};
+
+export type TranslationType = I18nContextProps;
+
+export type LocalizationContextProps = I18nContextProps & {
+  initLocalization: () => Promise<void>;
+  changeLanguage: (language: string) => void;
+};
+
+export type LocalizationState = {
+  language: string;
+  setLanguage: (language: string) => void;
+};
+`;
+
+  const storeContent = `import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { zustandStorage } from "~/lib/storage";
+import type { LocalizationState } from "~/lib/localization/types";
+
+export const useLocalizationStore = create<LocalizationState>()(
+  persist(
+    set => ({
+      language: ${JSON.stringify(lang)},
+      setLanguage: language => set(state => ({ ...state, language })),
+    }),
+    { name: "localization", storage: createJSONStorage(() => zustandStorage) },
+  ),
+);
+`;
+
+  await fs.writeFile(providerPath, providerContent, "utf8");
+  await fs.writeFile(typesPath, typesContent, "utf8");
+  await fs.writeFile(storePath, storeContent, "utf8");
+
+  console.log(
+    chalk.green(`✅ Configured localization (default language: ${lang})`)
+  );
+}
+
+async function updateAppTsxForSetup(
+  projectPath,
+  { navigationMode, localizationEnabled }
+) {
   const appTsxPath = path.join(projectPath, "App.tsx");
 
   if (!(await fs.pathExists(appTsxPath))) {
@@ -256,34 +491,79 @@ async function updateAppTsxForNavigation(projectPath, navigationMode) {
     return;
   }
 
-  if (navigationMode === "with-auth") {
-    // Use RootNavigator (full navigation with auth)
-    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
-import { RootNavigator } from "~/ui/navigation";
-
-export const App = () => (
-  <NavigationContainer>
-    <RootNavigator />
-  </NavigationContainer>
-);
-`;
-    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
-    console.log(chalk.green("✅ Updated App.tsx for navigation with auth"));
-  } else if (navigationMode === "app-only") {
-    // Use AppNavigator directly (no auth)
-    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
-import { AppNavigator } from "~/ui/navigation";
-
-export const App = () => (
-  <NavigationContainer>
-    <AppNavigator />
-  </NavigationContainer>
-);
-`;
-    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
-    console.log(chalk.green("✅ Updated App.tsx for app-only navigation"));
+  if (navigationMode === "none" && !localizationEnabled) {
+    // Keep template App.tsx as-is
+    return;
   }
-  // If navigationMode === "none", leave App.tsx as-is
+
+  const usesNav =
+    navigationMode === "with-auth" || navigationMode === "app-only";
+
+  const navigatorImport =
+    navigationMode === "with-auth"
+      ? 'import { RootNavigator } from "~/ui/navigation";'
+      : navigationMode === "app-only"
+      ? 'import { AppNavigator } from "~/ui/navigation";'
+      : "";
+
+  const contentJsx = usesNav
+    ? navigationMode === "with-auth"
+      ? `  return (\n    <NavigationContainer>\n      <RootNavigator />\n    </NavigationContainer>\n  );`
+      : `  return (\n    <NavigationContainer>\n      <AppNavigator />\n    </NavigationContainer>\n  );`
+    : `  return <View />;`;
+
+  if (localizationEnabled) {
+    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+import { useEffect } from "react";
+import { View } from "react-native";
+import RNBootSplash from "react-native-bootsplash";
+import { LocalizationProvider, useLocalization } from "~/lib/localization";
+${navigatorImport}
+
+const AppContent = () => {
+  const { initLocalization } = useLocalization();
+
+  useEffect(() => {
+    const appBoot = async () => {
+      await initLocalization();
+      RNBootSplash.hide();
+    };
+    appBoot();
+  }, []);
+
+${contentJsx}
+};
+
+export const App = () => (
+  <LocalizationProvider>
+    <AppContent />
+  </LocalizationProvider>
+);
+`;
+
+    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
+    console.log(chalk.green("✅ Updated App.tsx (with LocalizationProvider)"));
+    return;
+  }
+
+  // No localization: just hide splash on mount
+  const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+import { useEffect } from "react";
+import { View } from "react-native";
+import RNBootSplash from "react-native-bootsplash";
+${navigatorImport}
+
+export const App = () => {
+  useEffect(() => {
+    RNBootSplash.hide();
+  }, []);
+
+${contentJsx}
+};
+`;
+
+  await fs.writeFile(appTsxPath, appTsxContent, "utf8");
+  console.log(chalk.green("✅ Updated App.tsx"));
 }
 
 async function addFirebaseDependencies(
@@ -3426,6 +3706,7 @@ async function createApp(config) {
     maps = {},
     zustandStorage = false,
     navigationMode = "none",
+    localization = {},
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
@@ -3436,6 +3717,9 @@ async function createApp(config) {
   const mapsProvider = maps?.provider || null;
   const googleMapsApiKey = maps?.googleMapsApiKey || null;
   const enableGoogleMaps = mapsProvider === "google-maps";
+  const localizationEnabled = localization?.enabled || false;
+  const localizationDefaultLanguage = localization?.defaultLanguage || "ru";
+  const _localizationWithRemoteConfig = localization?.withRemoteConfig || false;
 
   // Step 1: Copy template
   const copySpinner = ora("Copying template files...").start();
@@ -3791,10 +4075,10 @@ async function createApp(config) {
       }
     }
 
-    // Create Zustand storage setup if selected OR if navigation with auth is enabled
-    // (auth store requires zustandStorage)
+    // Create Zustand storage setup if selected OR if required by enabled features
+    // (auth store + localization store require zustandStorage)
     const needsZustandStorage =
-      zustandStorage || navigationMode === "with-auth";
+      zustandStorage || navigationMode === "with-auth" || localizationEnabled;
     if (needsZustandStorage) {
       const libPath = path.join(projectPath, "src/lib");
       await fs.ensureDir(libPath);
@@ -3818,20 +4102,28 @@ export const zustandStorage: StateStorage = {
 `;
 
         await fs.writeFile(storageFilePath, storageContent, "utf8");
-        if (navigationMode === "with-auth" && !zustandStorage) {
+
+        if (
+          !zustandStorage &&
+          (navigationMode === "with-auth" || localizationEnabled)
+        ) {
+          const reasons = [];
+          if (navigationMode === "with-auth") reasons.push("auth navigation");
+          if (localizationEnabled) reasons.push("localization");
           console.log(
             chalk.green(
-              "✅ Created Zustand storage setup (required for auth navigation)"
+              `✅ Created Zustand storage setup (required for ${reasons.join(
+                " + "
+              )})`
             )
           );
         } else {
           console.log(chalk.green("✅ Created Zustand storage setup"));
         }
-      } else if (navigationMode === "with-auth") {
-        // Storage already exists, but verify it's correct for auth
+      } else if (navigationMode === "with-auth" || localizationEnabled) {
         console.log(
           chalk.green(
-            "✅ Zustand storage already exists (required for auth navigation)"
+            "✅ Zustand storage already exists (required for selected features)"
           )
         );
       }
@@ -3843,15 +4135,23 @@ export const zustandStorage: StateStorage = {
       await copyAuthTemplate(projectPath);
       // Copy full navigation template (RootNavigator, AuthNavigator, AppNavigator)
       await copyNavigationTemplate(projectPath, "with-auth");
-      // Update App.tsx to use RootNavigator
-      await updateAppTsxForNavigation(projectPath, "with-auth");
     } else if (navigationMode === "app-only") {
       // Copy only AppNavigator (no auth folder, no RootNavigator/AuthNavigator)
       await copyNavigationTemplate(projectPath, "app-only");
-      // Update App.tsx to use AppNavigator
-      await updateAppTsxForNavigation(projectPath, "app-only");
     }
-    // If navigationMode === "none", do nothing (leave template as-is)
+
+    // Localization setup (optional)
+    if (localizationEnabled) {
+      await addLocalizationDependencies(projectPath);
+      await copyLocalizationTemplate(projectPath);
+      await configureLocalization(projectPath, localizationDefaultLanguage);
+    }
+
+    // Update App.tsx if navigation and/or localization was selected
+    await updateAppTsxForSetup(projectPath, {
+      navigationMode,
+      localizationEnabled,
+    });
 
     // Add GoogleServices folder/file to Xcode project (after all targets are created)
     if (firebaseEnabled) {

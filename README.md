@@ -204,6 +204,27 @@ The tool will automatically:
 
 **Note:** If you skip navigation during project creation, you can always add it later manually or re-run the generator.
 
+### Localization Setup (Optional)
+
+After navigation setup, you'll be prompted to configure localization (based on `lepimvarim`):
+
+1. **Do you want to set up localization?** - Uses:
+   - `i18next`
+   - `react-i18next`
+   - `i18next-icu`
+   - `react-native-localize`
+2. **Default language** - Choose a default language code (e.g. `ru`, `en`, `ar`, `pt-BR`)
+   - This code is also used to create the first JSON file in `src/lib/localization/languages/<lang>.json`
+3. **Use with Remote Config?** - Optional flag (example will be added later)
+
+The tool will automatically:
+- Add i18n dependencies to `package.json` when localization is enabled
+- Create `src/lib/localization/` with provider/store/types and `languages/<lang>.json`
+- Ensure `src/lib/storage.ts` exists (required for persisted language selection)
+- Update `App.tsx` to wrap the app in `LocalizationProvider` and initialize localization on startup
+
+**Note:** If you skip localization during project creation, you can always add it later manually or re-run the generator.
+
 ### Splash Screen
 
 During project creation, you'll be prompted to provide a path to a directory containing splash screen images. This is optional - you can press Enter to skip and use default blank white splash screens.
@@ -354,6 +375,7 @@ The generated project includes a production-ready React Native app with:
 
 - 🧭 React Navigation v7 with Stack and Drawer (optional: with or without auth flow)
 - 🔐 Authentication setup (optional: Zustand-based auth store with navigation flow)
+- 🌍 Localization setup (optional: i18next + react-i18next + i18next-icu + react-native-localize)
 - 📦 Zustand for state management, TanStack Query for server state
 - 🔥 Firebase (optional: Analytics, Messaging, Remote Config)
 - 🗺️ Maps integration (optional: react-native-maps with optional Google Maps support)

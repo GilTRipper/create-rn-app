@@ -172,6 +172,12 @@ async function createProjectWithFirebase({
 
   // Maps? -> Cancel
   answers += "__CANCEL__\n";
+  // Zustand storage? -> no
+  answers += "no\n";
+  // Navigation? -> no
+  answers += "no\n";
+  // Localization? -> no
+  answers += "no\n";
   // Overwrite? (if exists) -> yes
   answers += "yes\n";
 

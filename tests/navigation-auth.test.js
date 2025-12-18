@@ -52,11 +52,16 @@ async function createProjectWithNavigation({
     answers += "yes\n"; // Set up navigation
     // Choose variant
     if (navigationMode === "app-only") {
-      answers += "0\n"; // First option: "Without auth"
+      // Default is \"Without auth\" - just press Enter
+      answers += "\n";
     } else if (navigationMode === "with-auth") {
-      answers += "1\n"; // Second option: "With auth"
+      // Move selection down to \"With auth\" and confirm
+      answers += "\u001B[B\n";
     }
   }
+
+  // Localization? -> no
+  answers += "no\n";
 
   // Overwrite? (if exists) -> yes
   answers += "yes\n";

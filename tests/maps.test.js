@@ -60,6 +60,13 @@ async function createProjectWithMaps({
     }
   }
 
+  // Zustand storage? -> no
+  answers += "no\n";
+  // Navigation? -> no
+  answers += "no\n";
+  // Localization? -> no
+  answers += "no\n";
+
   // Overwrite? (if exists) -> yes
   answers += "yes\n";
 

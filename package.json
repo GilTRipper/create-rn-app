@@ -36,7 +36,8 @@
   "files": [
     "bin",
     "src",
-    "template"
+    "template",
+    "template-presets"
   ],
   "engines": {
     "node": ">=20"

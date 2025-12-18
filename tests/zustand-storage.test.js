@@ -46,6 +46,11 @@ async function createProjectWithZustandStorage({
   // Zustand storage?
   answers += `${enableZustandStorage ? "yes" : "no"}\n`;
 
+  // Navigation? -> no
+  answers += "no\n";
+  // Localization? -> no
+  answers += "no\n";
+
   // Overwrite? (if exists) -> yes
   answers += "yes\n";
 
@@ -275,5 +280,6 @@ module.exports = async function runZustandStorageTests() {
     cleanupPath(projectPath);
   });
 };
+
 
 

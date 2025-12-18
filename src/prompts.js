@@ -485,6 +485,63 @@ async function getPrompts(projectNameArg, options) {
     navigationMode = "none";
   }
 
+  // Localization setup (interactive only, after Navigation)
+  // Uses: i18next + react-i18next + i18next-icu + react-native-localize
+  let localization = {
+    enabled: false,
+    defaultLanguage: null,
+    withRemoteConfig: false,
+  };
+
+  if (!options.yes) {
+    const { enableLocalization } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "enableLocalization",
+        message:
+          "Do you want to set up localization (i18next, react-i18next, i18next-icu, react-native-localize)?",
+        default: false,
+      },
+    ]);
+
+    if (enableLocalization) {
+      const { defaultLanguage } = await inquirer.prompt([
+        {
+          type: "input",
+          name: "defaultLanguage",
+          message:
+            "What default language do you want to use? (e.g. ru, en, ar)",
+          default: "ru",
+          validate: input => {
+            const lang = String(input || "").trim();
+            // allow: ru, en, ar, pt-BR, zh-Hans, etc.
+            if (!/^[a-z]{2,3}([_-][A-Za-z0-9]{2,8})*$/.test(lang)) {
+              return "Please enter a valid language code (e.g. ru, en, ar, pt-BR)";
+            }
+            return true;
+          },
+          filter: input => String(input || "").trim(),
+        },
+      ]);
+
+      const { withRemoteConfig } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "withRemoteConfig",
+          message:
+            "Do you want to use localization together with Remote Config? (example will be added later)",
+          default: false,
+        },
+      ]);
+
+      localization = {
+        enabled: true,
+        defaultLanguage: defaultLanguage,
+        withRemoteConfig,
+      };
+    }
+  }
+
   // Check if directory already exists
   const projectPath = path.join(
     process.cwd(),
@@ -571,6 +628,7 @@ async function getPrompts(projectNameArg, options) {
     maps: mapsConfig,
     zustandStorage: zustandStorageEnabled,
     navigationMode,
+    localization,
   };
 }
 

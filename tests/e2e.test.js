@@ -15,6 +15,7 @@ const runCliFlagsTests = require("./cli-flags.test");
 const runMapsTests = require("./maps.test");
 const runZustandStorageTests = require("./zustand-storage.test");
 const runNavigationAuthTests = require("./navigation-auth.test");
+const runLocalizationTests = require("./localization.test");
 
 // Cleanup before starting
 cleanupAll();
@@ -80,6 +81,9 @@ async function runAllTests() {
 
   log("\n=== Running Navigation & Auth Tests ===", "info");
   await runNavigationAuthTests();
+
+  log("\n=== Running Localization Tests ===", "info");
+  await runLocalizationTests();
 
   // Summary
   const { testsPassed, testsFailed } = getTestStats();

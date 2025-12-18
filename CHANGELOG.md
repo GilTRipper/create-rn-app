@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Auth store: Zustand-based authentication state management with persistence (when "With auth" is selected)
 - Automatic Zustand storage creation: When "With auth" navigation is selected, Zustand storage is automatically created (required for auth store persistence)
 - Navigation templates: Pre-configured navigation structure in `template-presets/navigation` and `template-presets/auth`
+- **Localization Setup**: Interactive prompt to configure localization after navigation setup
+- Localization uses: `i18next`, `react-i18next`, `i18next-icu`, `react-native-localize`
+- Default language prompt: generates the first `src/lib/localization/languages/<lang>.json`
+- Localization module: creates `src/lib/localization/` with provider/store/types
+- Automatic Zustand storage creation: When localization is selected, Zustand storage is automatically created (required for persisted language selection)
+- App bootstrap update: `App.tsx` is updated to wrap the app in `LocalizationProvider` and initialize i18n on startup
 - **Firebase lib modules**: When Analytics and/or Remote Config are selected, corresponding lib modules are automatically created in `src/lib/analytics` and/or `src/lib/remote-config` with TypeScript implementations
 - **Maps setup is now optional**: Interactive prompt to configure maps after Firebase setup
 - Maps selection: Choose whether to install react-native-maps or skip maps setup
