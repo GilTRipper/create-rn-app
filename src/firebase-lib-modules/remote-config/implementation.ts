@@ -93,4 +93,46 @@ export class RemoteConfig implements RemoteConfigInterface {
 
     return res.asNumber();
   }
+
+  private async prepareAndGetAll(options: RemoteConfigOptions = {}) {
+    if (options.defaults) {
+      await this.setDefaultValue(options.defaults);
+    }
+
+    if (options) {
+      await this.setPropertiesOrSignals(options);
+    }
+
+    await this.fetch();
+
+    return this.config.getAll();
+  }
+
+  public async getAllJSON<
+    T extends Record<
+      string,
+      Record<string, string | number | boolean | object | null>
+    >
+  >(options?: RemoteConfigOptions) {
+    const allValues = await this.prepareAndGetAll(options);
+    const result: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(allValues)) {
+      try {
+        const configValue = value as FirebaseRemoteConfigTypes.ConfigValue;
+        const jsonValue = JSON.parse(configValue.asString() || "{}");
+        if (
+          typeof jsonValue === "object" &&
+          jsonValue !== null &&
+          !Array.isArray(jsonValue)
+        ) {
+          result[key] = jsonValue;
+        }
+      } catch {
+        // Ignore parameters that are not valid JSON
+      }
+    }
+
+    return result as T;
+  }
 }

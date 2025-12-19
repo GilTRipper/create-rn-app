@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Localization module: creates `src/lib/localization/` with provider/store/types
 - Automatic Zustand storage creation: When localization is selected, Zustand storage is automatically created (required for persisted language selection)
 - App bootstrap update: `App.tsx` is updated to wrap the app in `LocalizationProvider` and initialize i18n on startup
+- **Localization with Remote Config integration**: Optional integration with Firebase Remote Config
+  - When enabled, localization fetches translations from Remote Config using `getAllJSON`
+  - Local translations are deep-merged with remote translations (local takes precedence for default language)
+  - All languages from Remote Config are automatically added to i18n resources via `addResourceBundle`
+  - Remote Config module updated with `getAllJSON` method for fetching all JSON configs at once
+  - Warning shown if Remote Config integration is selected but Firebase Remote Config is not enabled
 - **Firebase lib modules**: When Analytics and/or Remote Config are selected, corresponding lib modules are automatically created in `src/lib/analytics` and/or `src/lib/remote-config` with TypeScript implementations
 - **Maps setup is now optional**: Interactive prompt to configure maps after Firebase setup
 - Maps selection: Choose whether to install react-native-maps or skip maps setup

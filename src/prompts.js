@@ -524,15 +524,35 @@ async function getPrompts(projectNameArg, options) {
         },
       ]);
 
+      // Check if Firebase Remote Config is enabled
+      const firebaseRemoteConfigEnabled =
+        firebaseConfig?.enabled &&
+        firebaseConfig?.modules?.includes("remote-config");
+
       const { withRemoteConfig } = await inquirer.prompt([
         {
           type: "confirm",
           name: "withRemoteConfig",
-          message:
-            "Do you want to use localization together with Remote Config? (example will be added later)",
+          message: firebaseRemoteConfigEnabled
+            ? "Do you want to use localization together with Remote Config?"
+            : "Do you want to use localization together with Remote Config? (⚠️  Note: Firebase Remote Config is not enabled. Please enable it first or this feature won't work.)",
           default: false,
         },
       ]);
+
+      // Warn if remote-config is selected but Firebase Remote Config is not enabled
+      if (withRemoteConfig && !firebaseRemoteConfigEnabled) {
+        console.log(
+          chalk.yellow(
+            "⚠️  Warning: Localization with Remote Config requires Firebase Remote Config to be enabled."
+          )
+        );
+        console.log(
+          chalk.yellow(
+            "    The integration code will be added, but you'll need to enable Firebase Remote Config for it to work."
+          )
+        );
+      }
 
       localization = {
         enabled: true,

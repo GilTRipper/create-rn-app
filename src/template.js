@@ -296,7 +296,11 @@ async function copyLocalizationTemplate(projectPath) {
   console.log(chalk.green("✅ Copied localization template"));
 }
 
-async function configureLocalization(projectPath, defaultLanguage) {
+async function configureLocalization(
+  projectPath,
+  defaultLanguage,
+  withRemoteConfig = false
+) {
   const lang = String(defaultLanguage || "ru").trim();
   const targetLocalizationPath = path.join(projectPath, "src/lib/localization");
   const languagesDir = path.join(targetLocalizationPath, "languages");
@@ -329,6 +333,121 @@ async function configureLocalization(projectPath, defaultLanguage) {
   const typesPath = path.join(targetLocalizationPath, "types.ts");
   const storePath = path.join(targetLocalizationPath, "store/index.ts");
 
+  // Build provider content based on whether remote-config is enabled
+  const remoteConfigImport = withRemoteConfig
+    ? `import { useRemoteConfig } from "~/lib/remote-config";\n`
+    : "";
+  const remoteConfigHook = withRemoteConfig
+    ? `  const remoteConfig = useRemoteConfig();\n\n`
+    : "";
+
+  const deepMergeHelper = withRemoteConfig
+    ? `const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+const deepMerge = <T extends Record<string, unknown>>(base: T, override: Record<string, unknown>): T => {
+  const out: Record<string, unknown> = { ...base };
+
+  for (const [key, value] of Object.entries(override)) {
+    const baseValue = out[key];
+    if (isPlainObject(baseValue) && isPlainObject(value)) {
+      out[key] = deepMerge(baseValue, value);
+    } else {
+      out[key] = value;
+    }
+  }
+
+  return out as T;
+};
+
+`
+    : "";
+
+  const initLocalizationBody = withRemoteConfig
+    ? `    let lng = language;
+
+    if (!lng) {
+      lng = getLocales()[0].languageCode;
+      setLanguage(lng);
+    }
+
+    // Get all localizations from Remote Config at once
+    const defaults: Record<string, string> = {
+      ${JSON.stringify(lang)}: JSON.stringify(translations),
+    };
+
+    const allRemoteLocalizations = await remoteConfig.getAllJSON<Record<string, typeof translations>>({
+      defaults,
+    });
+
+    // Collect resources for all languages from Remote Config
+    const resources: Record<string, { translation: typeof translations }> = {};
+
+    // Merge all localizations from Remote Config
+    for (const [langCode, remoteTranslation] of Object.entries(allRemoteLocalizations)) {
+      if (langCode === ${JSON.stringify(lang)}) {
+        // For default language, merge with local file
+        resources[langCode] = {
+          translation: deepMerge(translations, remoteTranslation as unknown as Record<string, unknown>),
+        };
+      } else {
+        // For other languages, use only remote
+        resources[langCode] = { translation: remoteTranslation };
+      }
+    }
+
+    // If current language is ${JSON.stringify(
+      lang
+    )} and it's not in remote, use local
+    if (!resources[lng] && lng === ${JSON.stringify(lang)}) {
+      resources[lng] = { translation: translations };
+    }
+
+    // Add all resources to i18n and change language
+    for (const [langCode, resource] of Object.entries(resources)) {
+      i18n.addResourceBundle(langCode, "translation", resource.translation, true, true);
+    }
+
+    await i18n.changeLanguage(lng);`
+    : `    let lng = language;
+
+    if (!lng) {
+      lng = getLocales()[0].languageCode;
+      setLanguage(lng);
+    }
+
+    await i18n.use(initReactI18next).use(ICU).init({
+      // add all languages your app supports (from languages folder)
+      resources: { ${JSON.stringify(lang)}: { translation: translations } },
+      lng,
+      fallbackLng: ${JSON.stringify(lang)},
+      interpolation: { escapeValue: false },
+    });`;
+
+  const i18nInit = withRemoteConfig
+    ? `  const { language, setLanguage } = useLocalizationStore();
+  const { getLocales } = useLocalize();
+
+  // Initialize i18n synchronously with basic config before using useTranslation
+  if (!i18n.isInitialized) {
+    i18n
+      .use(initReactI18next)
+      .use(ICU)
+      .init({
+        resources: { ${JSON.stringify(lang)}: { translation: translations } },
+        lng: language || getLocales()[0]?.languageCode || ${JSON.stringify(
+          lang
+        )},
+        fallbackLng: ${JSON.stringify(lang)},
+        interpolation: { escapeValue: false },
+      });
+  }
+
+  const { t: rawT } = useTranslation();`
+    : `  const { t: rawT } = useTranslation();
+
+  const { language, setLanguage } = useLocalizationStore();
+  const { getLocales } = useLocalize();`;
+
   const providerContent = `import React, { createContext, useContext } from "react";
 import i18n from "i18next";
 import ICU from "i18next-icu";
@@ -336,12 +455,12 @@ import { initReactI18next, useTranslation } from "react-i18next";
 import { useLocalize } from "react-native-localize";
 import translations from "./languages/${lang}.json";
 import { useLocalizationStore } from "./store";
-import type { I18nContextProps, LocalizationContextProps, TranslationComponents } from "./types";
+${remoteConfigImport}import type { I18nContextProps, LocalizationContextProps, TranslationComponents } from "./types";
 import type { ReactNode } from "react";
 
 const LocalizationContext = createContext<LocalizationContextProps | undefined>(undefined);
 
-const parseWithComponents = (str: string, components: TranslationComponents): ReactNode => {
+${deepMergeHelper}const parseWithComponents = (str: string, components: TranslationComponents): ReactNode => {
   const regex = /<(\\w+)>(.*?)<\\/\\1>/gs;
   const parts: ReactNode[] = [];
   let lastIndex = 0;
@@ -370,31 +489,16 @@ const parseWithComponents = (str: string, components: TranslationComponents): Re
 
 // Don't forget to wrap your app with this provider
 export const LocalizationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { t: rawT } = useTranslation();
-
-  const { language, setLanguage } = useLocalizationStore();
-  const { getLocales } = useLocalize();
-
+${i18nInit}
+${remoteConfigHook}
   const rich: I18nContextProps["rich"] = (key, components, options?) => {
     const str = rawT(key, options);
+
     return parseWithComponents(str, components);
   };
 
   const initLocalization = async () => {
-    let lng = language;
-
-    if (!lng) {
-      lng = getLocales()[0].languageCode;
-      setLanguage(lng);
-    }
-
-    await i18n.use(initReactI18next).use(ICU).init({
-      // add all languages your app supports (from languages folder)
-      resources: { ${JSON.stringify(lang)}: { translation: translations } },
-      lng,
-      fallbackLng: ${JSON.stringify(lang)},
-      interpolation: { escapeValue: false },
-    });
+${initLocalizationBody}
   };
 
   const changeLanguage = async (newLanguage: string) => {
@@ -3719,7 +3823,7 @@ async function createApp(config) {
   const enableGoogleMaps = mapsProvider === "google-maps";
   const localizationEnabled = localization?.enabled || false;
   const localizationDefaultLanguage = localization?.defaultLanguage || "ru";
-  const _localizationWithRemoteConfig = localization?.withRemoteConfig || false;
+  const localizationWithRemoteConfig = localization?.withRemoteConfig || false;
 
   // Step 1: Copy template
   const copySpinner = ora("Copying template files...").start();
@@ -4144,7 +4248,36 @@ export const zustandStorage: StateStorage = {
     if (localizationEnabled) {
       await addLocalizationDependencies(projectPath);
       await copyLocalizationTemplate(projectPath);
-      await configureLocalization(projectPath, localizationDefaultLanguage);
+      await configureLocalization(
+        projectPath,
+        localizationDefaultLanguage,
+        localizationWithRemoteConfig
+      );
+
+      // If localization with remote-config is enabled, ensure remote-config module is copied
+      if (localizationWithRemoteConfig) {
+        const firebaseRemoteConfigEnabled =
+          firebaseEnabled && firebaseModules.includes("remote-config");
+        if (firebaseRemoteConfigEnabled) {
+          // Remote-config module should already be copied by Firebase setup above
+          console.log(
+            chalk.green(
+              "✅ Remote Config module available for localization integration"
+            )
+          );
+        } else {
+          console.log(
+            chalk.yellow(
+              "⚠️  Localization with Remote Config is enabled, but Firebase Remote Config is not."
+            )
+          );
+          console.log(
+            chalk.yellow(
+              "    Please enable Firebase Remote Config for this feature to work."
+            )
+          );
+        }
+      }
     }
 
     // Update App.tsx if navigation and/or localization was selected

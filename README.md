@@ -215,13 +215,21 @@ After navigation setup, you'll be prompted to configure localization (based on `
    - `react-native-localize`
 2. **Default language** - Choose a default language code (e.g. `ru`, `en`, `ar`, `pt-BR`)
    - This code is also used to create the first JSON file in `src/lib/localization/languages/<lang>.json`
-3. **Use with Remote Config?** - Optional flag (example will be added later)
+3. **Use with Remote Config?** - Optional integration with Firebase Remote Config
+   - If enabled, localization will fetch translations from Remote Config
+   - Local translations are merged with remote translations (local takes precedence for default language)
+   - **Note:** Requires Firebase Remote Config to be enabled (you'll be warned if it's not)
 
 The tool will automatically:
 - Add i18n dependencies to `package.json` when localization is enabled
 - Create `src/lib/localization/` with provider/store/types and `languages/<lang>.json`
 - Ensure `src/lib/storage.ts` exists (required for persisted language selection)
 - Update `App.tsx` to wrap the app in `LocalizationProvider` and initialize localization on startup
+- **If "Use with Remote Config" is enabled:**
+  - Integrates with Firebase Remote Config to fetch translations remotely
+  - Local translations are merged with remote translations (deep merge)
+  - All languages from Remote Config are automatically added to i18n resources
+  - Requires Firebase Remote Config module to be enabled (warns if not enabled)
 
 **Note:** If you skip localization during project creation, you can always add it later manually or re-run the generator.
 
