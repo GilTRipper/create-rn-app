@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.1] - 2025-12-16
+## [1.1.2] - 2025-12-16
 
 ### Fixed
 - **iOS multi-environment targets**: Fixed critical issue where `AppDelegate.swift` was not added to Sources build phase for environment targets (staging, development, etc.), causing "Undefined symbol: _main" linker errors
