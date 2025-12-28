@@ -8,12 +8,8 @@ const { replaceInFile } = require("./utils");
 
 const capitalize = str => str.charAt(0).toUpperCase() + str.slice(1);
 
-// Get proper environment name for schemes/targets (staging -> Stg, development -> Development, etc.)
+// Get proper environment name for schemes/targets (staging -> Staging, development -> Development, etc.)
 function getEnvNameForScheme(env) {
-  const lower = env.toLowerCase();
-  if (lower === "staging") {
-    return "Stg";
-  }
   return capitalize(env);
 }
 
@@ -1315,8 +1311,7 @@ async function addGoogleServicesToXcodeProject(
   if (hasMultipleEnvs && selectedEnvs.length > 0) {
     for (const env of selectedEnvs) {
       if (env.toLowerCase() === "production") continue;
-      const envSuffix =
-        env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+      const envSuffix = env.toLowerCase();
       const targetName = `${projectName}${
         envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
       }`;
@@ -1401,7 +1396,8 @@ async function addGoogleServicesToXcodeProject(
 async function copyAndroidEnvSources(
   selectedEnvs,
   projectPath,
-  bundleIdentifier
+  bundleIdentifier,
+  displayName
 ) {
   if (!selectedEnvs || selectedEnvs.length < 1) return;
 
@@ -1412,6 +1408,17 @@ async function copyAndroidEnvSources(
     );
     return;
   }
+
+  // Helper function to get environment display name
+  const getEnvDisplayName = (env, baseDisplayName) => {
+    const envNameMap = {
+      staging: "Staging",
+      development: "Dev",
+      local: "Local",
+    };
+    const envSuffix = envNameMap[env.toLowerCase()] || capitalize(env);
+    return `${baseDisplayName} ${envSuffix}`;
+  };
 
   for (const env of selectedEnvs) {
     // Skip production - it doesn't need a source directory, only flavor in build.gradle
@@ -1445,6 +1452,24 @@ async function copyAndroidEnvSources(
     };
 
     await copyRecursive(mainSrcPath, envDir);
+
+    // Update app_name in strings.xml for this environment
+    const envStringsXmlPath = path.join(envDir, "res/values/strings.xml");
+    if (await fs.pathExists(envStringsXmlPath)) {
+      let stringsContent = await fs.readFile(envStringsXmlPath, "utf8");
+      const envDisplayName = getEnvDisplayName(env, displayName);
+      const regex = /<string name="app_name">[^<]*<\/string>/m;
+      const replacement = `<string name="app_name">${envDisplayName}</string>`;
+      if (regex.test(stringsContent)) {
+        stringsContent = stringsContent.replace(regex, replacement);
+      } else {
+        stringsContent = stringsContent.replace(
+          /<\/resources>\s*$/m,
+          `    ${replacement}\n</resources>`
+        );
+      }
+      await fs.writeFile(envStringsXmlPath, stringsContent, "utf8");
+    }
 
     // Also copy fonts from main/assets/fonts to env/assets/fonts if they exist
     const mainFontsDir = path.join(mainSrcPath, "assets", "fonts");
@@ -1498,7 +1523,20 @@ function buildProductFlavorsBlock(selectedEnvs, bundleIdentifier) {
   const flavors = envsForFlavors
     .map(env => {
       const lower = env.toLowerCase();
-      return `        ${lower} {\n            dimension "default"\n            applicationId "${bundleIdentifier}"\n            resValue "string", "build_config_package", "${bundleIdentifier}"\n        }`;
+      // Each environment needs a unique applicationId to be a separate app
+      // Production uses base bundleIdentifier, others get a suffix
+      let applicationId = bundleIdentifier;
+      if (lower !== "production") {
+        // Use suffix: staging -> .staging, development -> .dev, local -> .local
+        const suffixMap = {
+          staging: "staging",
+          development: "dev",
+          local: "local",
+        };
+        const suffix = suffixMap[lower] || lower;
+        applicationId = `${bundleIdentifier}.${suffix}`;
+      }
+      return `        ${lower} {\n            minSdkVersion rootProject.ext.minSdkVersion\n            applicationId "${applicationId}"\n            targetSdkVersion rootProject.ext.targetSdkVersion\n            resValue "string", "build_config_package", "${bundleIdentifier}"\n        }`;
     })
     .join("\n");
 
@@ -1584,6 +1622,17 @@ async function updateAndroidBuildGradle(
         );
       }
     }
+  }
+
+  // Add matchingFallbacks to buildTypes (required for productFlavors)
+  // This ensures that debug/release build types can work with all flavors
+  const buildTypesRegex =
+    /(buildTypes\s*\{[\s\S]*?debug\s*\{[\s\S]*?signingConfig\s+signingConfigs\.debug)/m;
+  if (buildTypesRegex.test(content) && !content.includes("matchingFallbacks")) {
+    content = content.replace(
+      buildTypesRegex,
+      `$1\n            matchingFallbacks = ['debug', 'release']`
+    );
   }
 
   // Validate that envConfigFiles block is properly formatted
@@ -1860,7 +1909,7 @@ async function createIosEnvSchemes(
     );
 
     // CRITICAL: Replace ALL BuildableReference in scheme with environment-specific one
-    // This ensures the scheme uses the correct executable (lepimvarimStg.app instead of lepimvarim.app)
+    // This ensures the scheme uses the correct executable (lepimvarimStaging.app instead of lepimvarim.app)
     if (buildableRefs.envs?.[env]?.ref) {
       // Replace all BuildableReference blocks with the environment-specific one
       // Match BuildableReference with any whitespace/newlines
@@ -2542,12 +2591,11 @@ async function createIosTargetsForEnvs(
     );
 
     // Set bundle identifier for this environment target
-    // In lepimvarim: production = com.lepim.varim, staging = com.lepim.varim.stg
-    // Format: baseBundleIdentifier.env (lowercase, but use short name for staging: stg)
+    // In lepimvarim: production = com.lepim.varim, staging = com.lepim.varim.staging
+    // Format: baseBundleIdentifier.env (lowercase)
     const lowerEnv = env.toLowerCase();
-    const bundleIdEnv = lowerEnv === "staging" ? "stg" : lowerEnv;
     const envBundleIdentifier = baseBundleIdentifier
-      ? `${baseBundleIdentifier}.${bundleIdEnv}`
+      ? `${baseBundleIdentifier}.${lowerEnv}`
       : undefined;
 
     if (envBundleIdentifier) {
@@ -2625,7 +2673,7 @@ async function createIosTargetsForEnvs(
 
     // Set INFOPLIST_KEY_CFBundleDisplayName for environment targets
     // This ensures each environment target has a distinct display name
-    // In lepimvarim: staging uses "LepimVarim Stg" (displayName without spaces + " " + short env name)
+    // In lepimvarim: staging uses "LepimVarim Staging" (displayName without spaces + " " + env name)
     // Format: `${displayName.replace(/\s+/g, "")} ${getEnvNameForScheme(env)}` for environment targets
     const cleanDisplayName = displayName
       ? displayName.replace(/\s+/g, "")
@@ -3515,8 +3563,7 @@ async function createIosTargetsForEnvs(
   // CRITICAL: Before replacing configListSection, verify that staging config lists are present
   for (const env of selectedEnvs) {
     if (env.toLowerCase() === "production") continue;
-    const envSuffix =
-      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const envSuffix = env.toLowerCase();
     const targetName = `${projectName}${
       envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
     }`;
@@ -3551,8 +3598,7 @@ async function createIosTargetsForEnvs(
   const stagingConfigIds = {}; // Store expected config IDs for each staging target
   for (const env of selectedEnvs) {
     if (env.toLowerCase() === "production") continue;
-    const envSuffix =
-      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const envSuffix = env.toLowerCase();
     const targetName = `${projectName}${
       envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
     }`;
@@ -3591,8 +3637,7 @@ async function createIosTargetsForEnvs(
   // Check for all environment config lists (not just staging)
   for (const env of selectedEnvs) {
     if (env.toLowerCase() === "production") continue;
-    const envSuffix =
-      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const envSuffix = env.toLowerCase();
     const targetName = `${projectName}${
       envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
     }`;
@@ -3641,8 +3686,7 @@ async function createIosTargetsForEnvs(
   // CRITICAL: Verify that staging config lists still have correct config IDs after replacement
   for (const env of selectedEnvs) {
     if (env.toLowerCase() === "production") continue;
-    const envSuffix =
-      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const envSuffix = env.toLowerCase();
     const targetName = `${projectName}${
       envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
     }`;
@@ -3750,8 +3794,7 @@ async function createIosTargetsForEnvs(
   // Check if newDebugConfigId and newReleaseConfigId exist in content after replacement
   for (const env of selectedEnvs) {
     if (env.toLowerCase() === "production") continue;
-    const envSuffix =
-      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const envSuffix = env.toLowerCase();
     const targetName = `${projectName}${
       envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
     }`;
@@ -4049,8 +4092,7 @@ async function createIosTargetsForEnvs(
   // Use a more aggressive approach - find and replace directly
   for (const env of selectedEnvs) {
     if (env.toLowerCase() === "production") continue;
-    const envSuffix =
-      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const envSuffix = env.toLowerCase();
     const targetName = `${projectName}${
       envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
     }`;
@@ -4232,8 +4274,7 @@ async function createIosTargetsForEnvs(
   // ABSOLUTE FINAL CHECK: One more time before writing - verify and fix staging targets
   for (const env of selectedEnvs) {
     if (env.toLowerCase() === "production") continue;
-    const envSuffix =
-      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const envSuffix = env.toLowerCase();
     const targetName = `${projectName}${
       envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
     }`;
@@ -4943,7 +4984,7 @@ async function addInfoPlistsToXcodeProject(
 
   // CRITICAL: Before writing, verify staging targets still have correct config list IDs
   // This function runs AFTER createIosTargetsForEnvs, so we need to ensure nothing broke
-  // Find all environment targets (targets with names like "{projectName}Stg", "{projectName}Dev", etc.)
+  // Find all environment targets (targets with names like "{projectName}Staging", "{projectName}Dev", etc.)
   // by searching for config lists with environment target names
   const envTargetPattern = new RegExp(
     `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
@@ -5369,8 +5410,7 @@ async function addScriptsToPackageJson(
   for (const env of allEnvs) {
     const lowerEnv = env.toLowerCase();
     const capEnv = env.charAt(0).toUpperCase() + env.slice(1);
-    // Use short name for staging (stg)
-    const scriptEnv = lowerEnv === "staging" ? "stg" : lowerEnv;
+    const scriptEnv = lowerEnv;
 
     // Debug scripts
     if (lowerEnv === "production") {
@@ -5412,8 +5452,7 @@ async function addScriptsToPackageJson(
   );
   for (const env of envsForIos) {
     const lowerEnv = env.toLowerCase();
-    // Use short name for staging (stg) in script name
-    const scriptEnv = lowerEnv === "staging" ? "stg" : lowerEnv;
+    const scriptEnv = lowerEnv;
     const schemeName = `${projectName}${getEnvNameForScheme(env)}`;
     packageData.scripts[
       `ios:${scriptEnv}`
@@ -5752,7 +5791,12 @@ async function createApp(config) {
         ? envSetupSelectedEnvs
         : [];
     if (selectedEnvs.length > 0) {
-      await copyAndroidEnvSources(selectedEnvs, projectPath, bundleIdentifier);
+      await copyAndroidEnvSources(
+        selectedEnvs,
+        projectPath,
+        bundleIdentifier,
+        displayName
+      );
       await updateAndroidBuildGradle(
         selectedEnvs,
         projectPath,
@@ -5777,8 +5821,7 @@ async function createApp(config) {
           let content = await fs.readFile(pbxprojPath, "utf8");
           for (const env of selectedEnvs) {
             if (env.toLowerCase() === "production") continue;
-            const envSuffix =
-              env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+            const envSuffix = env.toLowerCase();
             const targetName = `${projectName}${
               envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
             }`;
@@ -5856,8 +5899,8 @@ async function createApp(config) {
 
         // Find the base target's configuration list ID
         // Base target has config list with name "Build configuration list for PBXNativeTarget \"{projectName}\""
-        // IMPORTANT: Must match EXACTLY "{projectName}" without any suffix (like "Stg", "Dev", etc.)
-        // Use word boundary to ensure we don't match environment targets like "lepimvarimStg"
+        // IMPORTANT: Must match EXACTLY "{projectName}" without any suffix (like "Staging", "Dev", etc.)
+        // Use word boundary to ensure we don't match environment targets like "lepimvarimStaging"
         const escapedProjectName = projectName.replace(
           /[.*+?^${}()|[\]\\]/g,
           "\\$&"
@@ -5936,8 +5979,7 @@ async function createApp(config) {
             // First, collect all config IDs from environment targets
             for (const env of selectedEnvs) {
               if (env.toLowerCase() === "production") continue;
-              const envSuffix =
-                env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+                      const envSuffix = env.toLowerCase();
               const targetName = `${projectName}${
                 envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
               }`;

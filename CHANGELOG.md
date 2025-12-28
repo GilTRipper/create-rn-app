@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **iOS multi-environment targets**: Fixed critical issue where `AppDelegate.swift` was not added to Sources build phase for environment targets (staging, development, etc.), causing "Undefined symbol: _main" linker errors
 - **iOS multi-environment resources**: Fixed issue where resources (including `BootSplash.storyboard`, fonts, images, etc.) were not added to Resources build phase for environment targets, causing runtime crashes with "Could not find a storyboard named 'BootSplash'" errors
 - **Build phase configuration**: Environment targets now correctly have their own Sources and Resources build phases with all necessary files, matching the reference implementation
+- **Android multi-environment flavors**: Fixed issue where all Android flavors were using the same `applicationId`, causing all environments to build as a single application. Now each flavor has a unique `applicationId` (production uses base bundle identifier, others get `.staging`, `.dev`, `.local` suffixes)
+- **Android flavor configuration**: Added `matchingFallbacks` to buildTypes and proper `minSdkVersion`/`targetSdkVersion` in each flavor, matching reference implementation
+- **Android environment app names**: Each Android environment now has its own `app_name` in `strings.xml` (e.g., "AppName Staging", "AppName Dev") for distinct app names on device
+- **Environment naming consistency**: Changed staging environment naming from "stg" to "staging" for both iOS and Android (target names, bundle IDs, display names, scripts)
 - Removed excessive debug logging that was added during troubleshooting
 
 ## [1.1.0] - 2025-12-16
