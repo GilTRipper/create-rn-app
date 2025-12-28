@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **iOS multi-environment targets**: Fixed critical issue where `AppDelegate.swift` was not added to Sources build phase for environment targets (staging, development, etc.), causing "Undefined symbol: _main" linker errors
+- **iOS multi-environment resources**: Fixed issue where resources (including `BootSplash.storyboard`, fonts, images, etc.) were not added to Resources build phase for environment targets, causing runtime crashes with "Could not find a storyboard named 'BootSplash'" errors
+- **Build phase configuration**: Environment targets now correctly have their own Sources and Resources build phases with all necessary files, matching the reference implementation
+- Removed excessive debug logging that was added during troubleshooting
+
 ## [1.1.0] - 2025-12-16
 
 ### Added

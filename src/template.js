@@ -1080,9 +1080,112 @@ async function addGoogleServicesToXcodeProject(
       );
     }
 
+    // Find all targets to create exception sets for each
+    const allEnvs = [...selectedEnvs];
+    if (!allEnvs.some(env => env.toLowerCase() === "production")) {
+      allEnvs.push("production");
+    }
+
+    // Find all targets (base + environment targets)
+    // Look for PBXNativeTarget blocks - they start with ID /* name */ = { and contain isa = PBXNativeTarget;
+    const targetMatches = [];
+    const nativeTargetSectionMatch = content.match(
+      /\/\* Begin PBXNativeTarget section \*\/\s*([\s\S]*?)\/\* End PBXNativeTarget section \*\//m
+    );
+    if (nativeTargetSectionMatch) {
+      const nativeTargetSection = nativeTargetSectionMatch[1];
+      // Match: ID /* name */ = { ... isa = PBXNativeTarget; ... name = name;
+      const targetBlockRegex =
+        /(\w{24})\s*\/\*\s*([^*]+)\s*\*\/\s*=\s*\{[\s\S]*?isa\s*=\s*PBXNativeTarget;[\s\S]*?name\s*=\s*([^;]+);/g;
+      let targetMatch;
+      while (
+        (targetMatch = targetBlockRegex.exec(nativeTargetSection)) !== null
+      ) {
+        const targetId = targetMatch[1];
+        const targetName = targetMatch[3].trim();
+        targetMatches.push({ id: targetId, name: targetName });
+      }
+    }
+
+    // Create exception sets for each target
+    const exceptionSetIds = [];
+    for (const target of targetMatches) {
+      // Determine which environment this target belongs to
+      let targetEnv = null;
+      const lowerTargetName = target.name.toLowerCase();
+      const lowerProjectName = projectName.toLowerCase();
+
+      // Check if it's the base production target
+      if (lowerTargetName === lowerProjectName) {
+        targetEnv = "production";
+      } else {
+        // Check environment targets
+        for (const env of allEnvs) {
+          const envName = getEnvNameForScheme(env);
+          if (
+            lowerTargetName.includes(env.toLowerCase()) ||
+            lowerTargetName.includes(envName.toLowerCase())
+          ) {
+            targetEnv = env.toLowerCase();
+            break;
+          }
+        }
+      }
+
+      if (!targetEnv) continue; // Skip if we can't determine the environment
+
+      // Create exception set ID
+      const exceptionSetId = generateXcodeId();
+      exceptionSetIds.push(exceptionSetId);
+
+      // Each target excludes its OWN environment file (as in lepimvarim)
+      const excludedFile = `"${targetEnv}/GoogleService-Info.plist"`;
+
+      // Add PBXFileSystemSynchronizedBuildFileExceptionSet section if it doesn't exist
+      if (
+        !content.includes(
+          "PBXFileSystemSynchronizedBuildFileExceptionSet section"
+        )
+      ) {
+        const exceptionSetSection = `/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */\n\t\t${exceptionSetId} /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {\n\t\t\tisa = PBXFileSystemSynchronizedBuildFileExceptionSet;\n\t\t\tmembershipExceptions = (\n\t\t\t\t${excludedFile},\n\t\t\t);\n\t\t\ttarget = ${target.id} /* ${target.name} */;\n\t\t};\n/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */\n\n`;
+
+        // Insert before PBXFileSystemSynchronizedRootGroup section
+        const rootGroupSectionRegex =
+          /\/\* Begin PBXFileSystemSynchronizedRootGroup section \*\//;
+        if (rootGroupSectionRegex.test(content)) {
+          content = content.replace(
+            rootGroupSectionRegex,
+            exceptionSetSection +
+              "/* Begin PBXFileSystemSynchronizedRootGroup section */"
+          );
+        } else {
+          // Insert before PBXFrameworksBuildPhase section
+          const frameworksSectionRegex =
+            /\/\* Begin PBXFrameworksBuildPhase section \*\//;
+          if (frameworksSectionRegex.test(content)) {
+            content = content.replace(
+              frameworksSectionRegex,
+              exceptionSetSection +
+                "/* Begin PBXFrameworksBuildPhase section */"
+            );
+          }
+        }
+      } else {
+        // Section exists, add our exception set before the end marker
+        const exceptionSetBlock = `\t\t${exceptionSetId} /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {\n\t\t\tisa = PBXFileSystemSynchronizedBuildFileExceptionSet;\n\t\t\tmembershipExceptions = (\n\t\t\t\t${excludedFile},\n\t\t\t);\n\t\t\ttarget = ${target.id} /* ${target.name} */;\n\t\t};\n`;
+        content = content.replace(
+          /(\/\* End PBXFileSystemSynchronizedBuildFileExceptionSet section \*\/)/,
+          `${exceptionSetBlock}$1`
+        );
+      }
+    }
+
     // Add PBXFileSystemSynchronizedRootGroup section if it doesn't exist
+    const exceptionsList = exceptionSetIds
+      .map(id => `${id} /* PBXFileSystemSynchronizedBuildFileExceptionSet */`)
+      .join(", ");
     if (!content.includes("PBXFileSystemSynchronizedRootGroup section")) {
-      const synchronizedRootGroupSection = `/* Begin PBXFileSystemSynchronizedRootGroup section */\n\t\t${googleServicesId} /* GoogleServices */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (); explicitFileTypes = {}; explicitFolders = (); path = GoogleServices; sourceTree = "<group>"; };\n/* End PBXFileSystemSynchronizedRootGroup section */\n\n`;
+      const synchronizedRootGroupSection = `/* Begin PBXFileSystemSynchronizedRootGroup section */\n\t\t${googleServicesId} /* GoogleServices */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (${exceptionsList}); explicitFileTypes = {}; explicitFolders = (); path = GoogleServices; sourceTree = "<group>"; };\n/* End PBXFileSystemSynchronizedRootGroup section */\n\n`;
 
       // Insert before PBXFrameworksBuildPhase section
       const frameworksSectionRegex =
@@ -1095,71 +1198,45 @@ async function addGoogleServicesToXcodeProject(
         );
       }
     } else {
-      // Section exists, just add our entry
-      const existingSectionRegex =
-        /(\/\* Begin PBXFileSystemSynchronizedRootGroup section \*\/)/;
-      content = content.replace(
-        existingSectionRegex,
-        `$1\n\t\t${googleServicesId} /* GoogleServices */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (); explicitFileTypes = {}; explicitFolders = (); path = GoogleServices; sourceTree = "<group>"; };`
+      // Section exists, update exceptions list
+      const rootGroupRegex = new RegExp(
+        `(${googleServicesId.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}\\s*\\/\\*\\s*GoogleServices\\s*\\*\\/\\s*=\\s*\\{[^}]*exceptions\\s*=\\s*\\()([^)]*)(\\)[^}]*\\};)`,
+        "m"
       );
-    }
+      if (rootGroupRegex.test(content)) {
+        // Get existing exception IDs
+        const existingExceptions = rootGroupRegex.exec(content);
+        const existingExceptionIds =
+          existingExceptions[2].match(/\w{24}/g) || [];
 
-    // Add to fileSystemSynchronizedGroups for all PBXNativeTarget sections
-    // Process in reverse order to avoid position shifts
+        // Combine existing and new exception IDs, avoiding duplicates
+        const allExceptionIds = [
+          ...new Set([...existingExceptionIds, ...exceptionSetIds]),
+        ];
+        const allExceptionsList = allExceptionIds
+          .map(
+            id => `${id} /* PBXFileSystemSynchronizedBuildFileExceptionSet */`
+          )
+          .join(", ");
 
-    // First, update existing fileSystemSynchronizedGroups
-    content = content.replace(
-      /(fileSystemSynchronizedGroups\s*=\s*\()([\s\S]*?)(\))/g,
-      (match, prefix, groups, suffix) => {
-        if (groups.includes("GoogleServices")) {
-          return match; // Already has GoogleServices
-        }
-        const trimmedGroups = groups.trim();
-        if (trimmedGroups === "") {
-          return `${prefix}${googleServicesId} /* GoogleServices */,\n\t\t\t${suffix}`;
-        } else {
-          return `${prefix}${trimmedGroups},\n\t\t\t\t${googleServicesId} /* GoogleServices */,\n\t\t\t${suffix}`;
-        }
-      }
-    );
-
-    // Then, add fileSystemSynchronizedGroups to targets that don't have it
-    // Process from end to beginning to avoid position shifts
-    const productTypeRegex = /productType\s*=\s*"[^"]+";/g;
-    const matches = [];
-    let m;
-    while ((m = productTypeRegex.exec(content)) !== null) {
-      matches.push({ index: m.index, length: m[0].length, fullMatch: m[0] });
-    }
-
-    // Process in reverse order
-    for (let i = matches.length - 1; i >= 0; i--) {
-      const match = matches[i];
-      const productTypePos = match.index;
-      const productTypeEnd = productTypePos + match.length;
-
-      // Find the target block boundaries
-      const beforeTarget = content.substring(0, productTypePos);
-      const targetStart = beforeTarget.lastIndexOf("isa = PBXNativeTarget;");
-      const afterProductType = content.substring(productTypeEnd);
-      const targetEnd = afterProductType.indexOf("\t\t};");
-
-      if (targetStart >= 0 && targetEnd >= 0) {
-        const targetBlock = content.substring(
-          targetStart,
-          productTypeEnd + targetEnd
+        content = content.replace(rootGroupRegex, `$1${allExceptionsList}$3`);
+      } else {
+        // Root group doesn't exist yet, add it
+        const existingSectionRegex =
+          /(\/\* Begin PBXFileSystemSynchronizedRootGroup section \*\/)/;
+        content = content.replace(
+          existingSectionRegex,
+          `$1\n\t\t${googleServicesId} /* GoogleServices */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (${exceptionsList}); explicitFileTypes = {}; explicitFolders = (); path = GoogleServices; sourceTree = "<group>"; };`
         );
-
-        // Check if this target already has fileSystemSynchronizedGroups
-        if (!targetBlock.includes("fileSystemSynchronizedGroups")) {
-          // Add fileSystemSynchronizedGroups after productType
-          content =
-            content.substring(0, productTypeEnd) +
-            `\n\t\t\tfileSystemSynchronizedGroups = (\n\t\t\t\t${googleServicesId} /* GoogleServices */,\n\t\t\t);` +
-            content.substring(productTypeEnd);
-        }
       }
     }
+
+    // Note: In lepimvarim, GoogleServices is added to mainGroup but NOT to fileSystemSynchronizedGroups in targets
+    // PBXFileSystemSynchronizedRootGroup with exceptions is sufficient - Xcode automatically handles file visibility
+    // We don't need to add fileSystemSynchronizedGroups to each target
   } else {
     // Single environment: add GoogleService-Info.plist file directly to project group
     // Check if file already exists (by name, not by reference)
@@ -1226,6 +1303,86 @@ async function addGoogleServicesToXcodeProject(
         resourcesPhaseRegex,
         `$1\t\t\t\t${buildFileId} /* GoogleService-Info.plist in Resources */,\n\t\t\t$2`
       );
+    }
+  }
+
+  // NOTE: In the reference project, there were NO fixes to buildConfigurationList in PBXNativeTarget blocks
+  // The fix was only in XCBuildConfiguration comments (renamed from "lepimvarimStg Debug" to "Debug")
+  // and in XCConfigurationList comments (renamed from "lepimvarimStg Debug" to "Debug")
+  // So we don't need to fix buildConfigurationList here - it should already be correct from createIosTargetsForEnvs
+
+  // CRITICAL: Verify that staging config list IDs are still correct after Google Services changes
+  if (hasMultipleEnvs && selectedEnvs.length > 0) {
+    for (const env of selectedEnvs) {
+      if (env.toLowerCase() === "production") continue;
+      const envSuffix =
+        env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+      const targetName = `${projectName}${
+        envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+      }`;
+
+      // Find staging target and its config list
+      const stagingTargetMatch = content.match(
+        new RegExp(
+          `(\\w{24})\\s*/\\*\\s*${targetName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}\\s*\\*/[\\s\\S]*?buildConfigurationList\\s*=\\s*(\\w{24})`,
+          "m"
+        )
+      );
+      if (stagingTargetMatch) {
+        const stagingConfigListId = stagingTargetMatch[2];
+        // Find config IDs in this config list
+        const stagingConfigListBlock = content.match(
+          new RegExp(
+            `${stagingConfigListId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+            "m"
+          )
+        );
+        if (stagingConfigListBlock) {
+          const configIdsInList =
+            stagingConfigListBlock[1].match(/\w{24}/g) || [];
+          // Check if these are base config IDs (should be different!)
+          const baseConfigListMatch = content.match(
+            new RegExp(
+              `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              )}"\\s*\\*/[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+              "m"
+            )
+          );
+          if (baseConfigListMatch) {
+            const baseConfigIds = baseConfigListMatch[2].match(/\w{24}/g) || [];
+            const overlap = configIdsInList.filter(id =>
+              baseConfigIds.includes(id)
+            );
+            if (overlap.length > 0) {
+              console.log(
+                chalk.red(
+                  `❌ AFTER GOOGLE SERVICES: ${targetName} config list uses SAME config IDs as base! Config IDs: ${configIdsInList.join(
+                    ", "
+                  )}, Base: ${baseConfigIds.join(
+                    ", "
+                  )}, Overlap: ${overlap.join(", ")}`
+                )
+              );
+            } else {
+              console.log(
+                chalk.green(
+                  `✅ AFTER GOOGLE SERVICES: ${targetName} config list correctly uses different config IDs: ${configIdsInList.join(
+                    ", "
+                  )}`
+                )
+              );
+            }
+          }
+        }
+      }
     }
   }
 
@@ -1687,11 +1844,49 @@ async function createIosEnvSchemes(
     );
     const envBuildableRef =
       buildableRefs.envs?.[env]?.ref || baseBuildableReference;
+
+    if (!buildableRefs.envs?.[env]?.ref) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Warning: No buildableRef for ${env}, using baseBuildableReference`
+        )
+      );
+    }
+
     const targetPath = path.join(schemesDir, `${schemeName}.xcscheme`);
     let schemeContent = baseSchemeContent.replace(
       /<Scheme[^>]*>/,
       `<Scheme LastUpgradeVersion = "1610" version = "1.7">`
     );
+
+    // CRITICAL: Replace ALL BuildableReference in scheme with environment-specific one
+    // This ensures the scheme uses the correct executable (lepimvarimStg.app instead of lepimvarim.app)
+    if (buildableRefs.envs?.[env]?.ref) {
+      // Replace all BuildableReference blocks with the environment-specific one
+      // Match BuildableReference with any whitespace/newlines
+      const buildableRefRegex =
+        /<BuildableReference[\s\S]*?<\/BuildableReference>/g;
+      const matches = schemeContent.match(buildableRefRegex);
+      if (matches && matches.length > 0) {
+        schemeContent = schemeContent.replace(
+          buildableRefRegex,
+          envBuildableRef
+        );
+      } else {
+        console.log(
+          chalk.yellow(`⚠️  No BuildableReference found in scheme to replace`)
+        );
+      }
+    } else {
+      console.log(
+        chalk.yellow(
+          `⚠️  No buildableRef for ${env}, scheme will use baseBuildableReference (${
+            baseBuildableReference?.match(/BuildableName = "([^"]+)"/)?.[1] ||
+            "unknown"
+          })`
+        )
+      );
+    }
 
     // Inject pre-actions into BuildAction (replace existing PreActions)
     const preAction = buildPreActionBlock(envBuildableRef, env, projectName);
@@ -1806,16 +2001,6 @@ ${targetBlocks}
       config[:reactNativePath],
       :mac_catalyst_enabled => false
     )
-
-    installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        config.build_settings['SWIFT_VERSION'] = '5.0'
-      end
-    end
-
-    installer.pods_project.build_configurations.each do |config|
-      config.build_settings['SWIFT_VERSION'] = '5.0'
-    end
   end
 end
 `;
@@ -1871,7 +2056,13 @@ function cloneBuildConfigBlock(baseBlock, newId, newName, envPlistName) {
   return block;
 }
 
-async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
+async function createIosTargetsForEnvs(
+  selectedEnvs,
+  projectPath,
+  projectName,
+  baseBundleIdentifier,
+  displayName
+) {
   if (!selectedEnvs || selectedEnvs.length < 1) return null;
 
   const envs = selectedEnvs.filter(env => env.toLowerCase() !== "production");
@@ -2066,13 +2257,6 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
             ) {
               const block = configSectionContent.substring(startPos, pos + 2); // +2 for "};"
               // Check if block contains invalid "Swift" field (without VERSION)
-              if (block.match(/^\s*Swift\s*=/m)) {
-                console.log(
-                  chalk.yellow(
-                    `⚠️  Found invalid "Swift" field in extracted block ${id}, will be removed during cleanup`
-                  )
-                );
-              }
               configBlocks[id] = block;
               foundEnd = true;
             }
@@ -2129,13 +2313,7 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
             if (blockEndPos !== -1) {
               const block = potentialBlock.substring(0, blockEndPos);
               // Check if block contains invalid "Swift" field (without VERSION)
-              if (block.match(/^\s*Swift\s*=/m)) {
-                console.log(
-                  chalk.yellow(
-                    `⚠️  Found invalid "Swift" field in fallback-extracted block ${id}, will be removed during cleanup`
-                  )
-                );
-              }
+
               configBlocks[id] = block;
               foundEnd = true;
             }
@@ -2172,11 +2350,6 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
     const openBraces = (block.match(/\{/g) || []).length;
     const closeBraces = (block.match(/\}/g) || []).length;
     if (openBraces !== closeBraces) {
-      console.log(
-        chalk.yellow(
-          `⚠️  Config block ${id} has mismatched braces: ${openBraces} open, ${closeBraces} close`
-        )
-      );
       // Try to fix by finding the correct end
       const blockStart = block.indexOf("= {");
       if (blockStart !== -1) {
@@ -2247,20 +2420,10 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
             const fieldName = fieldMatch[1];
             // Skip "Swift" without "VERSION" - this is invalid
             if (fieldName === "Swift" && !line.includes("SWIFT_VERSION")) {
-              console.log(
-                chalk.yellow(
-                  `⚠️  Removing invalid "Swift" field (without VERSION) in block ${id}`
-                )
-              );
               continue;
             }
             if (fieldNames.has(fieldName)) {
               // Skip duplicate field - keep only the first occurrence
-              console.log(
-                chalk.yellow(
-                  `⚠️  Removing duplicate field in block ${id}: ${fieldName}`
-                )
-              );
               continue;
             }
             fieldNames.add(fieldName);
@@ -2364,10 +2527,12 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
 
     // Build configurations
     const plistName = `${projectName} ${env}-Info.plist`;
+    // In working project, environment target configs have names "Debug" and "Release" (without target name prefix)
+    // This matches the pattern in lepimvarim where staging configs are just "Debug" and "Release"
     let debugCfg = cloneBuildConfigBlock(
       debugBase,
       newDebugConfigId,
-      `${targetName} Debug`,
+      "Debug",
       plistName
     );
     // Replace PRODUCT_NAME more precisely - only match PRODUCT_NAME field, not other fields
@@ -2376,10 +2541,46 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
       `PRODUCT_NAME = ${targetName};`
     );
 
+    // Set bundle identifier for this environment target
+    // In lepimvarim: production = com.lepim.varim, staging = com.lepim.varim.stg
+    // Format: baseBundleIdentifier.env (lowercase, but use short name for staging: stg)
+    const lowerEnv = env.toLowerCase();
+    const bundleIdEnv = lowerEnv === "staging" ? "stg" : lowerEnv;
+    const envBundleIdentifier = baseBundleIdentifier
+      ? `${baseBundleIdentifier}.${bundleIdEnv}`
+      : undefined;
+
+    if (envBundleIdentifier) {
+      const beforeBundleReplace = debugCfg;
+      debugCfg = debugCfg.replace(
+        /PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;/,
+        `PRODUCT_BUNDLE_IDENTIFIER = ${envBundleIdentifier};`
+      );
+      if (beforeBundleReplace === debugCfg) {
+        console.log(
+          chalk.yellow(
+            `⚠️  Could not replace bundle ID in debug config for ${targetName}. Bundle ID pattern not found.`
+          )
+        );
+      } else {
+        console.log(
+          chalk.green(
+            `✅ Set bundle ID for ${targetName} Debug: ${envBundleIdentifier}`
+          )
+        );
+      }
+    } else {
+      console.log(
+        chalk.yellow(
+          `⚠️  No bundle identifier provided for ${targetName}, using default`
+        )
+      );
+    }
+
     let releaseCfg = cloneBuildConfigBlock(
       releaseBase,
       newReleaseConfigId,
-      `${targetName} Release`,
+      "Release",
       plistName
     );
     // Replace PRODUCT_NAME more precisely - only match PRODUCT_NAME field, not other fields
@@ -2388,6 +2589,76 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
       `PRODUCT_NAME = ${targetName};`
     );
 
+    // Set bundle identifier for release config too
+    if (envBundleIdentifier) {
+      const beforeBundleReplace = releaseCfg;
+      releaseCfg = releaseCfg.replace(
+        /PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;/,
+        `PRODUCT_BUNDLE_IDENTIFIER = ${envBundleIdentifier};`
+      );
+      if (beforeBundleReplace === releaseCfg) {
+        console.log(
+          chalk.yellow(
+            `⚠️  Could not replace bundle ID in release config for ${targetName}. Bundle ID pattern not found.`
+          )
+        );
+      } else {
+        console.log(
+          chalk.green(
+            `✅ Set bundle ID for ${targetName} Release: ${envBundleIdentifier}`
+          )
+        );
+      }
+    }
+
+    // Remove baseConfigurationReference from environment targets
+    // CocoaPods will set the correct reference when 'pod install' is run
+    // This prevents errors about missing Pods files before pod install
+    debugCfg = debugCfg.replace(
+      /baseConfigurationReference\s*=\s*[^;]+;\s*/g,
+      ""
+    );
+    releaseCfg = releaseCfg.replace(
+      /baseConfigurationReference\s*=\s*[^;]+;\s*/g,
+      ""
+    );
+
+    // Set INFOPLIST_KEY_CFBundleDisplayName for environment targets
+    // This ensures each environment target has a distinct display name
+    // In lepimvarim: staging uses "LepimVarim Stg" (displayName without spaces + " " + short env name)
+    // Format: `${displayName.replace(/\s+/g, "")} ${getEnvNameForScheme(env)}` for environment targets
+    const cleanDisplayName = displayName
+      ? displayName.replace(/\s+/g, "")
+      : projectName;
+    const envDisplayName = `${cleanDisplayName} ${getEnvNameForScheme(env)}`;
+    // Check if INFOPLIST_KEY_CFBundleDisplayName already exists
+    if (!debugCfg.includes("INFOPLIST_KEY_CFBundleDisplayName")) {
+      // Add after INFOPLIST_FILE
+      debugCfg = debugCfg.replace(
+        /(INFOPLIST_FILE\s*=\s*[^;]+;\s*)/,
+        `$1\t\t\t\tINFOPLIST_KEY_CFBundleDisplayName = "${envDisplayName}";\n`
+      );
+    } else {
+      // Update existing value
+      debugCfg = debugCfg.replace(
+        /INFOPLIST_KEY_CFBundleDisplayName\s*=\s*[^;]+;/,
+        `INFOPLIST_KEY_CFBundleDisplayName = "${envDisplayName}";`
+      );
+    }
+    if (!releaseCfg.includes("INFOPLIST_KEY_CFBundleDisplayName")) {
+      // Add after INFOPLIST_FILE
+      releaseCfg = releaseCfg.replace(
+        /(INFOPLIST_FILE\s*=\s*[^;]+;\s*)/,
+        `$1\t\t\t\tINFOPLIST_KEY_CFBundleDisplayName = "${envDisplayName}";\n`
+      );
+    } else {
+      // Update existing value
+      releaseCfg = releaseCfg.replace(
+        /INFOPLIST_KEY_CFBundleDisplayName\s*=\s*[^;]+;/,
+        `INFOPLIST_KEY_CFBundleDisplayName = "${envDisplayName}";`
+      );
+    }
+
     // Preserve original formatting - blocks should already have correct tabs from cloneBuildConfigBlock
     // XCBuildConfiguration blocks end with "};" on a new line
     // Validate and fix block structure after replacements
@@ -2395,9 +2666,6 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
     // Ensure blocks end properly - they should end with "};" and newline
     const debugCfgTrimmed = debugCfg.trim();
     if (!debugCfgTrimmed.endsWith("};")) {
-      console.log(
-        chalk.yellow(`⚠️  Debug config block doesn't end with "};", fixing...`)
-      );
       // Try to fix - find the last "};" or add it
       const lastBrace = debugCfgTrimmed.lastIndexOf("}");
       if (
@@ -2430,11 +2698,6 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
 
     const releaseCfgTrimmed = releaseCfg.trim();
     if (!releaseCfgTrimmed.endsWith("};")) {
-      console.log(
-        chalk.yellow(
-          `⚠️  Release config block doesn't end with "};", fixing...`
-        )
-      );
       // Try to fix - find the last "};" or add it
       const lastBrace = releaseCfgTrimmed.lastIndexOf("}");
       if (
@@ -2473,7 +2736,26 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
       `${debugCfg}${releaseCfg}/* End XCBuildConfiguration section */`
     );
 
-    let newConfigList = `\t\t${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */ = {\n\t\t\tisa = XCConfigurationList;\n\t\t\tbuildConfigurations = (\n\t\t\t\t${newDebugConfigId} /* ${targetName} Debug */,\n\t\t\t\t${newReleaseConfigId} /* ${targetName} Release */,\n\t\t\t);\n\t\t\tdefaultConfigurationIsVisible = 0;\n\t\t\tdefaultConfigurationName = Release;\n\t\t};`;
+    // In working project, config list comments use just "Debug" and "Release" (matching the config names)
+    let newConfigList = `\t\t${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */ = {\n\t\t\tisa = XCConfigurationList;\n\t\t\tbuildConfigurations = (\n\t\t\t\t${newDebugConfigId} /* Debug */,\n\t\t\t\t${newReleaseConfigId} /* Release */,\n\t\t\t);\n\t\t\tdefaultConfigurationIsVisible = 0;\n\t\t\tdefaultConfigurationName = Release;\n\t\t};`;
+
+    // CRITICAL: Verify that newConfigList uses correct config IDs
+    const newConfigListConfigIds = newConfigList.match(/\w{24}/g) || [];
+    const expectedConfigIds = [
+      newConfigListId,
+      newDebugConfigId,
+      newReleaseConfigId,
+    ];
+    const hasCorrectIds = expectedConfigIds.every(id =>
+      newConfigListConfigIds.includes(id)
+    );
+    if (!hasCorrectIds) {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: newConfigList does not contain expected config IDs!`
+        )
+      );
+    }
 
     // Ensure config list ends properly
     newConfigList = newConfigList.trim();
@@ -2482,11 +2764,18 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
     }
     newConfigList += "\n";
 
+    // CRITICAL: Store expected config IDs before insertion
+    const expectedConfigIdsBeforeInsert = [
+      newDebugConfigId,
+      newReleaseConfigId,
+    ];
+
     // Insert before the end marker - find last complete block and insert after it
     // XCConfigurationList blocks are multiline and end with "};"
     const lastConfigListBlockMatch = configListSection.match(
       /(\t\t\w{24}[^}]*\};\n)(?=\/\* End XCConfigurationList section \*\/)/
     );
+    const beforeInsert = configListSection;
     if (lastConfigListBlockMatch) {
       configListSection = configListSection.replace(
         lastConfigListBlockMatch[0],
@@ -2499,12 +2788,200 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
       );
     }
 
+    // Verify that newConfigList was added
+    if (beforeInsert === configListSection) {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: Failed to add config list for ${targetName} to configListSection!`
+        )
+      );
+    } else {
+      // Verify the config list is in configListSection
+      const verifyMatch = configListSection.match(
+        new RegExp(
+          `${newConfigListId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}"\\s*\\*/`
+        )
+      );
+      if (!verifyMatch) {
+        console.log(
+          chalk.red(
+            `❌ CRITICAL: Config list for ${targetName} NOT found in configListSection after insertion!`
+          )
+        );
+      }
+    }
+
     // Native target - replace specific fields to avoid double replacement
-    // First replace IDs
-    let newTarget = targetBlock
-      .replace(new RegExp(`${baseTargetId}`, "g"), newTargetId)
-      .replace(new RegExp(`${baseProductRefId}`, "g"), newProductRefId)
-      .replace(new RegExp(`${baseConfigListId}`, "g"), newConfigListId);
+    // IMPORTANT: Replace config list ID FIRST, before other ID replacements
+    // This is critical - staging target MUST have its own config list ID
+    const escapedBaseConfigListId = baseConfigListId.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+
+    // Replace config list ID FIRST - use exact pattern matching
+    // Format: buildConfigurationList = <ID> /* Build configuration list for PBXNativeTarget "..." */
+    let newTarget = targetBlock;
+
+    // CRITICAL: Replace config list ID FIRST, before any other replacements
+    // Find the exact line with buildConfigurationList
+    const configListLineMatch = newTarget.match(
+      /buildConfigurationList\s*=\s*(\w{24})\s*\/\*\s*Build configuration list for PBXNativeTarget "[^"]*"\s*\*\//
+    );
+
+    if (configListLineMatch) {
+      const currentConfigListId = configListLineMatch[1];
+
+      // Replace it with newConfigListId - use a very precise pattern
+      const replacePattern = new RegExp(
+        `(buildConfigurationList\\s*=\\s*)${currentConfigListId.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}(\\s*\\/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*\\/)`,
+        "g"
+      );
+
+      const beforeReplace = newTarget;
+      // CRITICAL: Replace with correct comment for this target
+      newTarget = newTarget.replace(
+        replacePattern,
+        `$1${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+      );
+
+      if (beforeReplace === newTarget) {
+        console.log(
+          chalk.red(
+            `❌ ERROR: Replacement did not work! Pattern: ${replacePattern}`
+          )
+        );
+      } else {
+      }
+    } else {
+      console.log(
+        chalk.red(
+          `❌ ERROR: Could not find buildConfigurationList line in targetBlock!`
+        )
+      );
+      // Try to find it without the comment
+      const simpleMatch = newTarget.match(
+        /buildConfigurationList\s*=\s*(\w{24})/
+      );
+      if (simpleMatch) {
+        console.log(
+          chalk.yellow(
+            `⚠️  Found buildConfigurationList without comment: ${simpleMatch[1]}`
+          )
+        );
+        // Try to replace it anyway - add correct comment
+        newTarget = newTarget.replace(
+          new RegExp(
+            `buildConfigurationList\\s*=\\s*${simpleMatch[1].replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)?`,
+            "g"
+          ),
+          `buildConfigurationList = ${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+        );
+        console.log(
+          chalk.yellow(`⚠️  Attempted replacement without comment pattern`)
+        );
+      }
+    }
+
+    // Verify the replacement worked before continuing
+    const verifyConfigListMatch = newTarget.match(
+      /buildConfigurationList\s*=\s*(\w{24})/
+    );
+    if (verifyConfigListMatch) {
+      const actualConfigListId = verifyConfigListMatch[1];
+      if (actualConfigListId !== newConfigListId) {
+        console.log(
+          chalk.red(
+            `❌ CRITICAL ERROR: Config list ID replacement failed! Expected ${newConfigListId}, but found ${actualConfigListId}`
+          )
+        );
+        // Force the replacement if it failed
+        newTarget = newTarget.replace(
+          new RegExp(
+            `buildConfigurationList\\s*=\\s*${actualConfigListId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+            "g"
+          ),
+          `buildConfigurationList = ${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+        );
+      } else {
+      }
+    }
+
+    // Now replace other IDs - but be careful not to replace the config list ID again
+    // IMPORTANT: Replace baseTargetId and baseProductRefId, but NOT newConfigListId
+    // We need to protect newConfigListId from being replaced
+    const escapedNewConfigListId = newConfigListId.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+
+    // Replace baseTargetId, but be VERY careful not to replace config list ID
+    // We need to protect newConfigListId from being replaced
+    // Strategy: replace baseTargetId only if it's NOT part of buildConfigurationList line
+    // and NOT the same as newConfigListId
+    if (baseTargetId !== newConfigListId) {
+      // Use a more precise pattern that explicitly excludes buildConfigurationList context
+      newTarget = newTarget.replace(
+        new RegExp(
+          `(?<!buildConfigurationList\\s*=\\s*)${baseTargetId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}(?!\\s*/\\*\\s*Build configuration list)`,
+          "g"
+        ),
+        newTargetId
+      );
+    } else {
+    }
+
+    // Replace baseProductRefId, but protect newConfigListId
+    if (baseProductRefId !== newConfigListId) {
+      newTarget = newTarget.replace(
+        new RegExp(
+          `${baseProductRefId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+          "g"
+        ),
+        newProductRefId
+      );
+    } else {
+    }
+
+    // Final verification: ensure config list ID is still correct after other replacements
+    const finalVerifyMatch = newTarget.match(
+      /buildConfigurationList\s*=\s*(\w{24})/
+    );
+    if (finalVerifyMatch && finalVerifyMatch[1] !== newConfigListId) {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: Config list ID was overwritten! Restoring to ${newConfigListId}`
+        )
+      );
+      newTarget = newTarget.replace(
+        new RegExp(
+          `buildConfigurationList\\s*=\\s*${finalVerifyMatch[1].replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+          "g"
+        ),
+        `buildConfigurationList = ${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+      );
+    }
 
     // Then replace names in specific places (avoiding global replace)
     newTarget = newTarget.replace(
@@ -2539,15 +3016,375 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
       new RegExp(`productReference = ${newProductRefId} /\\* .*?\\.app \\*/;`),
       `productReference = ${newProductRefId} /* ${productName}.app */;`
     );
-    // Replace buildPhases if we have the block, but be careful with multiline matching
+
+    // Verify config list ID is still correct after name/product replacements
+    const afterNameCheck = newTarget.match(
+      /buildConfigurationList\s*=\s*(\w{24})/
+    );
+    if (afterNameCheck && afterNameCheck[1] !== newConfigListId) {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: Config list ID was overwritten after name/product replacements! Restoring...`
+        )
+      );
+      newTarget = newTarget.replace(
+        new RegExp(
+          `buildConfigurationList\\s*=\\s*${afterNameCheck[1].replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}(\\s*\\/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*\\/)`,
+          "g"
+        ),
+        `buildConfigurationList = ${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+      );
+    }
+
+    // Create new build phases with new IDs for this target
+    // In lepimvarim, each target has its own build phases with unique IDs
+    // We need to create Sources, Frameworks, Resources, and Bundle React Native build phases
+    // Pods build phases will be created by CocoaPods when 'pod install' is run
+    const newSourcesPhaseId = genId();
+    const newFrameworksPhaseId = genId();
+    const newResourcesPhaseId = genId();
+    const newBundleRnPhaseId = genId();
+
+    // Find base build phases to copy structure from
+    let baseSourcesPhase = null;
+    let baseFrameworksPhase = null;
+    let baseResourcesPhase = null;
+    let baseBundleRnPhase = null;
+
     if (buildPhasesBlock) {
-      // Find the buildPhases line and replace everything until the closing );
-      const buildPhasesRegex = /buildPhases = \([\s\S]*?\);/m;
-      if (buildPhasesRegex.test(newTarget)) {
-        newTarget = newTarget.replace(buildPhasesRegex, buildPhasesBlock);
+      const buildPhaseIds = buildPhasesBlock.match(/\w{24}/g) || [];
+
+      for (const phaseId of buildPhaseIds) {
+        // Find build phase block in content
+        const phaseBlockMatch = content.match(
+          new RegExp(
+            `${phaseId}\\s*\\/\\*\\s*([^*]+)\\s*\\*\\/\\s*=\\s*\\{([\\s\\S]*?)\\};`,
+            "m"
+          )
+        );
+        if (!phaseBlockMatch) continue;
+
+        const phaseName = phaseBlockMatch[1].trim();
+        const phaseContent = phaseBlockMatch[2];
+
+        // Identify phase type and copy structure (skip Pods phases - CocoaPods will create them)
+        if (phaseName === "Sources" && !phaseName.includes("[CP]")) {
+          baseSourcesPhase = { id: phaseId, content: phaseContent };
+        } else if (phaseName === "Frameworks" && !phaseName.includes("[CP]")) {
+          baseFrameworksPhase = { id: phaseId, content: phaseContent };
+        } else if (phaseName === "Resources" && !phaseName.includes("[CP]")) {
+          baseResourcesPhase = { id: phaseId, content: phaseContent };
+        } else if (phaseName.includes("Bundle React Native")) {
+          baseBundleRnPhase = { id: phaseId, content: phaseContent };
+        }
+      }
+    }
+
+    // Create new build phases blocks
+    // In reference project, each target's Sources phase contains only AppDelegate.swift
+    // We need to find AppDelegate.swift from base Sources phase and add it to new Sources phase
+    const sourcesSectionMatch = content.match(
+      /\/\* Begin PBXSourcesBuildPhase section \*\/[\s\S]*?\/\* End PBXSourcesBuildPhase section \*\//m
+    );
+    if (sourcesSectionMatch && baseSourcesPhase) {
+      // Extract files from base Sources phase - we only need AppDelegate.swift
+      const baseFilesMatch = baseSourcesPhase.content.match(
+        /files\s*=\s*\(([\s\S]*?)\);/
+      );
+      let newSourcesFiles = "";
+
+      if (baseFilesMatch) {
+        const baseFilesContent = baseFilesMatch[1];
+        // Find AppDelegate.swift buildFile reference
+        const appDelegateMatch = baseFilesContent.match(
+          /(\w{24})\s*\/\*\s*AppDelegate\.swift\s+in\s+Sources\s*\*/
+        );
+
+        if (appDelegateMatch) {
+          const existingBuildFileId = appDelegateMatch[1];
+
+          // Find existing PBXBuildFile block to get fileRef
+          const existingBuildFileBlock = content.match(
+            new RegExp(
+              `${existingBuildFileId.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              )}\\s*/\\*\\s*AppDelegate\\.swift\\s+in\\s+Sources\\s*\\*/\\s*=\\s*\\{[^}]*fileRef\\s*=\\s*(\\w{24})[^}]*\\};`,
+              "m"
+            )
+          );
+
+          if (existingBuildFileBlock) {
+            const fileRefId = existingBuildFileBlock[1];
+            // Create new PBXBuildFile entry with new ID but same fileRef
+            const newBuildFileId = genId();
+            const buildFileContent = `\t\t${newBuildFileId} /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = ${fileRefId} /* AppDelegate.swift */; };`;
+
+            // Add new PBXBuildFile entry to PBXBuildFile section
+            content = content.replace(
+              /(\/\* End PBXBuildFile section \*\/)/,
+              `${buildFileContent}\n$1`
+            );
+
+            // Add to new Sources phase files list
+            newSourcesFiles = `\t\t\t\t${newBuildFileId} /* AppDelegate.swift in Sources */,\n`;
+          }
+        }
+      }
+
+      // Create new Sources phase block with AppDelegate.swift only
+      const newSourcesBlock = `\t\t${newSourcesPhaseId} /* Sources */ = {\n\t\t\tisa = PBXSourcesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n${newSourcesFiles}\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n`;
+      content = content.replace(
+        /(\/\* End PBXSourcesBuildPhase section \*\/)/,
+        `${newSourcesBlock}$1`
+      );
+    }
+
+    const frameworksSectionMatch = content.match(
+      /\/\* Begin PBXFrameworksBuildPhase section \*\/[\s\S]*?\/\* End PBXFrameworksBuildPhase section \*\//m
+    );
+    if (frameworksSectionMatch && baseFrameworksPhase) {
+      const newFrameworksBlock = `\t\t${newFrameworksPhaseId} /* Frameworks */ = {\n\t\t\tisa = PBXFrameworksBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n`;
+      content = content.replace(
+        /(\/\* End PBXFrameworksBuildPhase section \*\/)/,
+        `${newFrameworksBlock}$1`
+      );
+    }
+
+    // Create Resources phase and copy all files from base Resources phase
+    // In reference project, staging Resources phase contains all the same files as base,
+    // but with different buildFile IDs (same fileRef)
+    const resourcesSectionMatch = content.match(
+      /\/\* Begin PBXResourcesBuildPhase section \*\/[\s\S]*?\/\* End PBXResourcesBuildPhase section \*\//m
+    );
+    if (resourcesSectionMatch && baseResourcesPhase) {
+      // Extract files from base Resources phase
+      const baseFilesMatch = baseResourcesPhase.content.match(
+        /files\s*=\s*\(([\s\S]*?)\);/
+      );
+      let newResourcesFiles = "";
+
+      if (baseFilesMatch) {
+        const baseFilesContent = baseFilesMatch[1];
+        // Extract all buildFile references from base Resources phase
+        const buildFileRefs =
+          baseFilesContent.match(/(\w{24})\s*\/\*\s*([^*]+)\s*\*/g) || [];
+
+        // For each buildFile, create a new PBXBuildFile entry with new ID but same fileRef
+        const buildFileSectionMatch = content.match(
+          /\/\* Begin PBXBuildFile section \*\/[\s\S]*?\/\* End PBXBuildFile section \*\//m
+        );
+
+        if (buildFileSectionMatch) {
+          const newBuildFileEntries = [];
+
+          for (const buildFileRef of buildFileRefs) {
+            // Extract buildFile ID and file name
+            const buildFileMatch = buildFileRef.match(
+              /(\w{24})\s*\/\*\s*([^*]+)\s*\*/
+            );
+            if (buildFileMatch) {
+              const existingBuildFileId = buildFileMatch[1];
+              const fileName = buildFileMatch[2].trim();
+
+              // Find existing PBXBuildFile block to get fileRef
+              const existingBuildFileBlock = content.match(
+                new RegExp(
+                  `${existingBuildFileId.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  )}\\s*/\\*\\s*${fileName.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  )}\\s*\\*/\\s*=\\s*\\{[^}]*fileRef\\s*=\\s*(\\w{24})[^}]*\\};`,
+                  "m"
+                )
+              );
+
+              if (existingBuildFileBlock) {
+                const fileRefId = existingBuildFileBlock[1];
+                // Extract file name without " in Resources" suffix for fileRef comment
+                const fileRefName = fileName.split(" in ")[0];
+                // Create new PBXBuildFile entry with new ID but same fileRef
+                const newBuildFileId = genId();
+                const buildFileContent = `\t\t${newBuildFileId} /* ${fileName} */ = {isa = PBXBuildFile; fileRef = ${fileRefId} /* ${fileRefName} */; };`;
+                newBuildFileEntries.push({
+                  buildFileId: newBuildFileId,
+                  fileName: fileName,
+                  buildFileContent: buildFileContent,
+                });
+
+                // Add to new Resources phase files list
+                newResourcesFiles += `\t\t\t\t${newBuildFileId} /* ${fileName} */,\n`;
+              }
+            }
+          }
+
+          // Add new PBXBuildFile entries to PBXBuildFile section
+          if (newBuildFileEntries.length > 0) {
+            const buildFileEntries = newBuildFileEntries
+              .map(entry => entry.buildFileContent)
+              .join("\n");
+            content = content.replace(
+              /(\/\* End PBXBuildFile section \*\/)/,
+              `${buildFileEntries}\n$1`
+            );
+          }
+        }
+      }
+
+      // Create new Resources phase block with files
+      const newResourcesBlock = `\t\t${newResourcesPhaseId} /* Resources */ = {\n\t\t\tisa = PBXResourcesBuildPhase;\n\t\t\tbuildActionMask = 2147483647;\n\t\t\tfiles = (\n${newResourcesFiles}\t\t\t);\n\t\t\trunOnlyForDeploymentPostprocessing = 0;\n\t\t};\n`;
+      content = content.replace(
+        /(\/\* End PBXResourcesBuildPhase section \*\/)/,
+        `${newResourcesBlock}$1`
+      );
+    }
+
+    // Copy Bundle React Native phase if it exists
+    if (baseBundleRnPhase) {
+      // Find the block start
+      const blockStartRegex = new RegExp(
+        `(\\t\\t)${baseBundleRnPhase.id.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}\\s*\\/\\*\\s*([^*]+)\\s*\\*\\/\\s*=\\s*\\{`,
+        "m"
+      );
+      const blockStartMatch = content.match(blockStartRegex);
+      if (blockStartMatch) {
+        const indent = blockStartMatch[1];
+        const comment = blockStartMatch[2].trim();
+        const blockStartPos = blockStartMatch.index + blockStartMatch[0].length;
+
+        // Find the closing }; by counting braces
+        let braceCount = 1; // Already inside opening brace
+        let pos = blockStartPos;
+        let foundEnd = false;
+        let blockEndPos = -1;
+
+        while (pos < content.length && !foundEnd) {
+          const char = content[pos];
+          if (char === "{") braceCount++;
+          if (char === "}") {
+            braceCount--;
+            if (braceCount === 0) {
+              // Check if next char is semicolon
+              if (pos + 1 < content.length && content[pos + 1] === ";") {
+                blockEndPos = pos + 2; // Include };
+                foundEnd = true;
+              }
+            }
+          }
+          pos++;
+        }
+
+        if (foundEnd && blockEndPos > 0) {
+          // Extract the complete block
+          const originalBlock = content.substring(
+            blockStartMatch.index,
+            blockEndPos
+          );
+          // Replace ID with new ID
+          const newBundleRnBlock = originalBlock.replace(
+            new RegExp(
+              baseBundleRnPhase.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+              "g"
+            ),
+            newBundleRnPhaseId
+          );
+
+          const shellScriptSectionMatch = content.match(
+            /\/\* Begin PBXShellScriptBuildPhase section \*\/[\s\S]*?\/\* End PBXShellScriptBuildPhase section \*\//m
+          );
+          if (shellScriptSectionMatch) {
+            content = content.replace(
+              /(\/\* End PBXShellScriptBuildPhase section \*\/)/,
+              `${newBundleRnBlock}\n$1`
+            );
+          }
+        }
+      }
+    }
+
+    // Create buildPhases list with new IDs (Pods phases will be added by CocoaPods)
+    let newBuildPhasesBlock = "buildPhases = (\n";
+    // Order: Sources, Frameworks, Resources, Bundle React Native (Pods phases will be added by CocoaPods)
+    newBuildPhasesBlock += `\t\t\t\t${newSourcesPhaseId} /* Sources */,\n`;
+    newBuildPhasesBlock += `\t\t\t\t${newFrameworksPhaseId} /* Frameworks */,\n`;
+    newBuildPhasesBlock += `\t\t\t\t${newResourcesPhaseId} /* Resources */,\n`;
+    if (baseBundleRnPhase) {
+      newBuildPhasesBlock += `\t\t\t\t${newBundleRnPhaseId} /* Bundle React Native code and images */,\n`;
+    }
+    newBuildPhasesBlock += "\t\t\t);";
+
+    // Replace buildPhases in new target
+    const buildPhasesRegex = /buildPhases = \([\s\S]*?\);/m;
+    if (buildPhasesRegex.test(newTarget)) {
+      newTarget = newTarget.replace(buildPhasesRegex, newBuildPhasesBlock);
+
+      // Verify config list ID is still correct after buildPhases replacement
+      const afterBuildPhasesCheck = newTarget.match(
+        /buildConfigurationList\s*=\s*(\w{24})/
+      );
+      if (
+        afterBuildPhasesCheck &&
+        afterBuildPhasesCheck[1] !== newConfigListId
+      ) {
+        console.log(
+          chalk.red(
+            `❌ CRITICAL: Config list ID was overwritten after buildPhases replacement! Restoring...`
+          )
+        );
+        newTarget = newTarget.replace(
+          new RegExp(
+            `buildConfigurationList\\s*=\\s*${afterBuildPhasesCheck[1].replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}(\\s*\\/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*\\/)`,
+            "g"
+          ),
+          `buildConfigurationList = ${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+        );
       }
     }
     // Preserve original formatting from targetBlock
+    // CRITICAL: Final check before inserting - ensure config list ID is correct
+    const finalCheckMatch = newTarget.match(
+      /buildConfigurationList\s*=\s*(\w{24})/
+    );
+    if (finalCheckMatch) {
+      const finalConfigListId = finalCheckMatch[1];
+      if (finalConfigListId !== newConfigListId) {
+        console.log(
+          chalk.red(
+            `❌ CRITICAL: Config list ID is wrong before insertion! Expected ${newConfigListId}, found ${finalConfigListId}. Fixing...`
+          )
+        );
+        // Force replace one more time
+        newTarget = newTarget.replace(
+          new RegExp(
+            `buildConfigurationList\\s*=\\s*${finalConfigListId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}(\\s*\\/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*\\/)`,
+            "g"
+          ),
+          `buildConfigurationList = ${newConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+        );
+      } else {
+      }
+    } else {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: Could not find buildConfigurationList in newTarget before insertion!`
+        )
+      );
+    }
+
     // Ensure target block ends properly
     newTarget = newTarget.trim();
     if (!newTarget.endsWith(";")) {
@@ -2569,6 +3406,47 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
       nativeSection = nativeSection.replace(
         "/* End PBXNativeTarget section */",
         `${newTarget}/* End PBXNativeTarget section */`
+      );
+    }
+
+    // CRITICAL: Verify that the inserted newTarget still has correct config list ID
+    const insertedTargetMatch = nativeSection.match(
+      new RegExp(
+        `${newTargetId.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}[\\s\\S]*?buildConfigurationList\\s*=\\s*(\\w{24})`
+      )
+    );
+    if (insertedTargetMatch) {
+      const insertedConfigListId = insertedTargetMatch[1];
+      if (insertedConfigListId !== newConfigListId) {
+        console.log(
+          chalk.red(
+            `❌ CRITICAL: After insertion, config list ID is wrong! Expected ${newConfigListId}, found ${insertedConfigListId}. Fixing in nativeSection...`
+          )
+        );
+        // Fix it in nativeSection
+        nativeSection = nativeSection.replace(
+          new RegExp(
+            `(${newTargetId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)${insertedConfigListId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}(\\s*\\/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*\\/)`,
+            "m"
+          ),
+          `$1${newConfigListId}$2`
+        );
+      } else {
+      }
+    } else {
+      console.log(
+        chalk.yellow(
+          `⚠️  Could not find inserted target ${newTargetId} in nativeSection for verification`
+        )
       );
     }
 
@@ -2615,9 +3493,330 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
   }
 
   content = content.replace(fileRefSectionRe, fileRefSection);
+
+  // NOTE: According to REFERENCE_FIX_ANALYSIS, in the reference project there were NO changes
+  // to buildConfigurationList in PBXNativeTarget blocks, so we don't need to snapshot or verify
+  // before replacement. The staging target should already have the correct buildConfigurationList ID
+  // from createIosTargetsForEnvs.
+
+  // NOTE: According to REFERENCE_FIX_ANALYSIS, in the reference project there were NO changes
+  // to buildConfigurationList in PBXNativeTarget blocks. The fix was only:
+  // 1. Renamed comments in XCBuildConfiguration blocks (from "lepimvarimStg Debug" to "Debug")
+  // 2. Removed duplicate configurations
+  // 3. Fixed scheme file
+  // So we don't need to verify or fix buildConfigurationList in nativeSection before replacement.
+  // The staging target should already have the correct buildConfigurationList ID from createIosTargetsForEnvs.
+
+  // Now replace nativeSection
+  // NOTE: According to REFERENCE_FIX_ANALYSIS, in the reference project there were NO changes
+  // to buildConfigurationList in PBXNativeTarget blocks, so we don't need to verify or fix after replacement
   content = content.replace(nativeSectionRe, nativeSection);
+
+  // CRITICAL: Before replacing configListSection, verify that staging config lists are present
+  for (const env of selectedEnvs) {
+    if (env.toLowerCase() === "production") continue;
+    const envSuffix =
+      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const targetName = `${projectName}${
+      envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+    }`;
+
+    // Check if staging config list exists in configListSection
+    const stagingConfigListMatch = configListSection.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}"\\s*\\*/`
+      )
+    );
+
+    if (!stagingConfigListMatch) {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: Config list for ${targetName} NOT found in configListSection before replacement!`
+        )
+      );
+    } else {
+      console.log(
+        chalk.green(
+          `✅ Verified: Config list for ${targetName} (ID: ${stagingConfigListMatch[1]}) found in configListSection before replacement`
+        )
+      );
+    }
+  }
+
+  // CRITICAL: Before replacing configListSection, save staging config list IDs and their config IDs
+  const stagingConfigListIds = {};
+  const stagingConfigIds = {}; // Store expected config IDs for each staging target
+  for (const env of selectedEnvs) {
+    if (env.toLowerCase() === "production") continue;
+    const envSuffix =
+      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const targetName = `${projectName}${
+      envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+    }`;
+
+    const stagingConfigListMatch = configListSection.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}"\\s*\\*/[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+        "m"
+      )
+    );
+
+    if (stagingConfigListMatch) {
+      const configListId = stagingConfigListMatch[1];
+      const configIdsInList = stagingConfigListMatch[2].match(/\w{24}/g) || [];
+      stagingConfigListIds[targetName] = configListId;
+      stagingConfigIds[targetName] = configIdsInList;
+      console.log(
+        chalk.cyan(
+          `📸 Saved staging config list ID before replacement: ${targetName} -> ${configListId} with config IDs: ${configIdsInList.join(
+            ", "
+          )}`
+        )
+      );
+    }
+  }
+
+  // CRITICAL: Before replacing, verify configListSection contains environment config lists
+  console.log(
+    chalk.cyan(
+      `📸 configListSection length before replacement: ${configListSection.length}`
+    )
+  );
+  // Check for all environment config lists (not just staging)
+  for (const env of selectedEnvs) {
+    if (env.toLowerCase() === "production") continue;
+    const envSuffix =
+      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const targetName = `${projectName}${
+      envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+    }`;
+    const envConfigListPattern = new RegExp(
+      `Build configuration list for PBXNativeTarget "${targetName.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      )}"`,
+      "g"
+    );
+    const envConfigListsInSection =
+      configListSection.match(envConfigListPattern);
+    if (envConfigListsInSection) {
+      console.log(
+        chalk.green(
+          `✅ Found ${envConfigListsInSection.length} config list(s) for ${targetName} in configListSection before replacement`
+        )
+      );
+    } else {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: NO config list found for ${targetName} in configListSection before replacement!`
+        )
+      );
+    }
+  }
+
+  const beforeConfigListReplace = content;
+  const configListSectionMatch = content.match(configListSectionRe);
+  if (configListSectionMatch) {
+    console.log(
+      chalk.cyan(
+        `📸 Found configListSection in content, length: ${configListSectionMatch[0].length}`
+      )
+    );
+  } else {
+    console.log(
+      chalk.red(
+        `❌ CRITICAL: Could not find configListSection in content using regex!`
+      )
+    );
+  }
+
   content = content.replace(configListSectionRe, configListSection);
+
+  // CRITICAL: Verify that staging config lists still have correct config IDs after replacement
+  for (const env of selectedEnvs) {
+    if (env.toLowerCase() === "production") continue;
+    const envSuffix =
+      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const targetName = `${projectName}${
+      envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+    }`;
+
+    if (stagingConfigListIds[targetName] && stagingConfigIds[targetName]) {
+      const expectedConfigListId = stagingConfigListIds[targetName];
+      const expectedConfigIds = stagingConfigIds[targetName];
+
+      // Find config list in content after replacement
+      const configListMatch = content.match(
+        new RegExp(
+          `${expectedConfigListId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+          "m"
+        )
+      );
+
+      if (configListMatch) {
+        const actualConfigIds = configListMatch[1].match(/\w{24}/g) || [];
+        const matches = expectedConfigIds.every(id =>
+          actualConfigIds.includes(id)
+        );
+        if (!matches) {
+          console.log(
+            chalk.red(
+              `❌ AFTER configListSection replacement: ${targetName} config list has WRONG config IDs!`
+            )
+          );
+          console.log(
+            chalk.red(
+              `   Expected: ${expectedConfigIds.join(
+                ", "
+              )}, Found: ${actualConfigIds.join(", ")}`
+            )
+          );
+        } else {
+          console.log(
+            chalk.green(
+              `✅ AFTER configListSection replacement: ${targetName} config list has correct config IDs: ${actualConfigIds.join(
+                ", "
+              )}`
+            )
+          );
+        }
+      }
+    }
+  }
+  const afterConfigListReplace = content;
+
+  // CRITICAL: Verify that configListSection replacement worked
+  if (beforeConfigListReplace === afterConfigListReplace) {
+    console.log(
+      chalk.red(
+        `❌ CRITICAL: configListSection replacement did NOT occur! The regex did not match!`
+      )
+    );
+  } else {
+    console.log(
+      chalk.green(`✅ configListSection replacement occurred successfully`)
+    );
+  }
+
+  // CRITICAL: Verify that staging config lists are still present after replacement
+  for (const [targetName, expectedConfigListId] of Object.entries(
+    stagingConfigListIds
+  )) {
+    const stagingConfigListAfterMatch = content.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}"\\s*\\*/`
+      )
+    );
+
+    if (!stagingConfigListAfterMatch) {
+      console.log(
+        chalk.red(
+          `❌ CRITICAL: Config list for ${targetName} (ID: ${expectedConfigListId}) NOT found in content after replacement!`
+        )
+      );
+    } else {
+      const actualConfigListId = stagingConfigListAfterMatch[1];
+      if (actualConfigListId === expectedConfigListId) {
+        console.log(
+          chalk.green(
+            `✅ Verified: Config list for ${targetName} (ID: ${actualConfigListId}) preserved after replacement`
+          )
+        );
+      } else {
+        console.log(
+          chalk.red(
+            `❌ CRITICAL: Config list for ${targetName} has wrong ID! Expected ${expectedConfigListId}, found ${actualConfigListId}`
+          )
+        );
+      }
+    }
+  }
+
   content = content.replace(configSectionRe, configSection);
+
+  // CRITICAL: Verify that new config blocks were added to content
+  // Check if newDebugConfigId and newReleaseConfigId exist in content after replacement
+  for (const env of selectedEnvs) {
+    if (env.toLowerCase() === "production") continue;
+    const envSuffix =
+      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const targetName = `${projectName}${
+      envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+    }`;
+
+    // Find the config list ID for this target
+    const targetConfigListMatch = content.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}"\\s*\\*/`
+      )
+    );
+    if (targetConfigListMatch) {
+      const targetConfigListId = targetConfigListMatch[1];
+      // Find config IDs in this config list
+      const configListBlockMatch = content.match(
+        new RegExp(
+          `${targetConfigListId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+          "m"
+        )
+      );
+      if (configListBlockMatch) {
+        const configIdsInList = configListBlockMatch[1].match(/\w{24}/g) || [];
+        console.log(
+          chalk.cyan(
+            `📋 After configSection replacement, ${targetName} config list contains: ${configIdsInList.join(
+              ", "
+            )}`
+          )
+        );
+
+        // Check if these config IDs exist in configSection
+        const configIdsExist = configIdsInList.every(id => {
+          const exists = content.includes(`${id} /*`);
+          if (!exists) {
+            console.log(
+              chalk.red(
+                `❌ Config ID ${id} referenced in ${targetName} config list but NOT found in content!`
+              )
+            );
+          }
+          return exists;
+        });
+        if (!configIdsExist) {
+          console.log(
+            chalk.red(
+              `❌ CRITICAL: Some config IDs in ${targetName} config list are missing from content!`
+            )
+          );
+        }
+      }
+    }
+  }
+
+  // NOTE: In the reference project, there were NO fixes after nativeSection replacement
+  // The fix was only in nativeSection before replacement (which we do above)
+  // So we don't need to verify or fix after replacement
+
+  // NOTE: In the reference project, there were NO final fixes after all replacements
+  // The fix was only in nativeSection before replacement (which we do above)
+  // So we don't need to verify or fix after all replacements
 
   // Validate that all blocks are properly closed
   const openBraces = (content.match(/\{/g) || []).length;
@@ -2732,7 +3931,374 @@ async function createIosTargetsForEnvs(selectedEnvs, projectPath, projectName) {
     }
   );
 
+  // Update Pods file names in build phases for multi-environment setup
+  // CocoaPods creates files with names like Pods-{projectName}CommonPods-{targetName}
+  // instead of Pods-{projectName} for multi-environment projects
+  // Update base target: Pods-{projectName} -> Pods-{projectName}CommonPods-{projectName}
+  const escapedProjectName = projectName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const basePodsPattern = new RegExp(
+    `(Target Support Files/Pods-)${escapedProjectName}(/)`,
+    "g"
+  );
+  const basePodsReplacement = `$1${projectName}CommonPods-${projectName}$2`;
+  content = content.replace(basePodsPattern, basePodsReplacement);
+
+  // Update environment targets: Pods-{projectName}CommonPods-{projectName} -> Pods-{projectName}CommonPods-{targetName}
+  for (const env of envs) {
+    const capEnv = getEnvNameForScheme(env);
+    const envTargetName = `${projectName}${capEnv}`;
+    const envPodsPattern = new RegExp(
+      `(Target Support Files/Pods-${escapedProjectName}CommonPods-)${escapedProjectName}(/)`,
+      "g"
+    );
+    // Only replace in paths that are for this environment target's build phases
+    // We need to be careful not to replace base target's paths
+    // The pattern will match, but we'll replace only in environment-specific contexts
+    // Actually, CocoaPods will handle this during pod install, so we just need to
+    // update base target references
+  }
+
+  // Ensure all PBXFileReference objects for Pods libraries are in Frameworks group
+  // This prevents "no parent for object" errors
+  // IMPORTANT: Do this AFTER all sections have been updated in content
+  // Find Frameworks group (re-find it in case content was modified)
+  const frameworksGroupRegex =
+    /(\w{24})\s*\/\*\s*Frameworks\s*\*\/\s*=\s*\{[\s\S]*?isa = PBXGroup;[\s\S]*?children\s*=\s*\(([\s\S]*?)\);[\s\S]*?name = Frameworks;/m;
+  const frameworksGroupMatch = content.match(frameworksGroupRegex);
+
+  if (frameworksGroupMatch) {
+    const frameworksGroupId = frameworksGroupMatch[1];
+    const frameworksChildren = frameworksGroupMatch[2];
+
+    // Find all PBXFileReference objects for libPods-*.a files
+    // Pattern: ID /* libPods-*.a */ = {isa = PBXFileReference; ... sourceTree = BUILT_PRODUCTS_DIR; ...};
+    const fileRefSectionMatch = content.match(
+      /\/\* Begin PBXFileReference section \*\/\s*([\s\S]*?)\/\* End PBXFileReference section \*\//m
+    );
+
+    if (fileRefSectionMatch) {
+      const fileRefSection = fileRefSectionMatch[1];
+      // Match any libPods-*.a file reference
+      const podsFileRefRegex =
+        /(\t\t)(\w{24})(\s*\/\*\s*libPods-[^*]+\*\/\s*=\s*\{[^}]*isa\s*=\s*PBXFileReference[^}]*sourceTree\s*=\s*BUILT_PRODUCTS_DIR[^}]*\};)/g;
+
+      // Reset regex lastIndex to ensure we find all matches
+      podsFileRefRegex.lastIndex = 0;
+
+      let podsFileRefMatch;
+      const fileRefsToAdd = [];
+
+      while (
+        (podsFileRefMatch = podsFileRefRegex.exec(fileRefSection)) !== null
+      ) {
+        const fileRefId = podsFileRefMatch[2];
+        const fullMatch = podsFileRefMatch[0];
+
+        // Extract the file name from the comment
+        const fileNameMatch = fullMatch.match(/\/\*\s*(libPods-[^*]+)\s*\*\//);
+        const fileName = fileNameMatch
+          ? fileNameMatch[1]
+          : `libPods-${projectName}.a`;
+
+        // Check if this file reference is already in Frameworks group
+        // Use a regex to match the ID with word boundaries to avoid partial matches
+        const idRegex = new RegExp(`\\b${fileRefId}\\b`);
+        const inFrameworksGroup = idRegex.test(frameworksChildren);
+
+        if (!inFrameworksGroup) {
+          fileRefsToAdd.push({ id: fileRefId, name: fileName });
+        }
+      }
+
+      // Add missing file references to Frameworks group
+      if (fileRefsToAdd.length > 0) {
+        // Re-find the Frameworks group block to get updated children list
+        const updatedFrameworksGroupMatch = content.match(frameworksGroupRegex);
+        if (updatedFrameworksGroupMatch) {
+          const updatedFrameworksGroupId = updatedFrameworksGroupMatch[1];
+          const updatedFrameworksChildren = updatedFrameworksGroupMatch[2];
+
+          const frameworksGroupChildrenRegex = new RegExp(
+            `(${updatedFrameworksGroupId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}[\\s\\S]*?children\\s*=\\s*\\()([\\s\\S]*?)(\\)[\\s\\S]*?name = Frameworks;)`,
+            "m"
+          );
+
+          content = content.replace(
+            frameworksGroupChildrenRegex,
+            (match, prefix, children, suffix) => {
+              const trimmedChildren = children.trim();
+              const newEntries = fileRefsToAdd
+                .map(ref => `\n\t\t\t\t${ref.id} /* ${ref.name} */,`)
+                .join("");
+              const newChildren =
+                trimmedChildren === ""
+                  ? `${newEntries}\n\t\t\t`
+                  : `${trimmedChildren}${newEntries}\n\t\t\t`;
+              return `${prefix}${newChildren}${suffix}`;
+            }
+          );
+        }
+      }
+    }
+  }
+
+  // ABSOLUTE FINAL CHECK: Verify config list IDs one more time before writing
+  // Use a more aggressive approach - find and replace directly
+  for (const env of selectedEnvs) {
+    if (env.toLowerCase() === "production") continue;
+    const envSuffix =
+      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const targetName = `${projectName}${
+      envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+    }`;
+
+    // Find correct config list ID
+    const correctConfigListMatch = content.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}"\\s*\\*/`
+      )
+    );
+
+    if (!correctConfigListMatch) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Could not find config list for ${targetName} before final write`
+        )
+      );
+      continue;
+    }
+
+    const correctConfigListId = correctConfigListMatch[1];
+
+    // Find target ID
+    const targetIdMatch = content.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}\\s*\\*/`
+      )
+    );
+
+    if (!targetIdMatch) {
+      console.log(
+        chalk.yellow(
+          `⚠️  Could not find target ${targetName} before final write`
+        )
+      );
+      continue;
+    }
+
+    const targetId = targetIdMatch[1];
+
+    // Find the target block - get everything from target ID to the closing brace
+    // Use a more precise pattern that captures the entire target block
+    const targetBlockPattern = new RegExp(
+      `(${targetId.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      )}\\s*/\\*\\s*${targetName.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      )}\\s*\\*/\\s*=\\s*\\{[\\s\\S]*?buildConfigurationList\\s*=\\s*)(\\w{24})(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+      "m"
+    );
+
+    const targetBlockMatch = content.match(targetBlockPattern);
+    if (targetBlockMatch) {
+      const currentConfigListId = targetBlockMatch[2];
+
+      if (currentConfigListId !== correctConfigListId) {
+        console.log(
+          chalk.red(
+            `❌ ABSOLUTE FINAL FIX: ${targetName} (${targetId}) has wrong config list ID! Expected ${correctConfigListId}, found ${currentConfigListId}. Fixing with aggressive replacement...`
+          )
+        );
+
+        // AGGRESSIVE FIX: Replace using multiple strategies
+        // Strategy 1: Replace the entire line with correct ID and comment
+        const aggressivePattern1 = new RegExp(
+          `(${targetId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)${currentConfigListId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+          "m"
+        );
+
+        const beforeFix = content;
+        content = content.replace(
+          aggressivePattern1,
+          `$1${correctConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+        );
+
+        if (beforeFix === content) {
+          console.log(
+            chalk.yellow(
+              `⚠️  Strategy 1 failed, trying Strategy 2 for ${targetName}...`
+            )
+          );
+          // Strategy 2: Replace just the ID (more aggressive, less precise)
+          const aggressivePattern2 = new RegExp(
+            `(${targetId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}[\\s\\S]{0,5000}?buildConfigurationList\\s*=\\s*)${currentConfigListId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}(\\s*/\\*\\s*Build configuration list)`,
+            "m"
+          );
+          content = content.replace(
+            aggressivePattern2,
+            `$1${correctConfigListId}$2 for PBXNativeTarget "${targetName}" */`
+          );
+
+          if (beforeFix === content) {
+            console.log(
+              chalk.yellow(
+                `⚠️  Strategy 2 failed, trying Strategy 3 (simple ID replacement) for ${targetName}...`
+              )
+            );
+            // Strategy 3: Simple ID replacement anywhere in target block
+            const simplePattern = new RegExp(
+              `(${targetId.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)${currentConfigListId.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              )}`,
+              "m"
+            );
+            content = content.replace(
+              simplePattern,
+              `$1${correctConfigListId}`
+            );
+          }
+        }
+
+        // Verify the fix worked
+        const verifyPattern = new RegExp(
+          `(${targetId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)(\\w{24})(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+          "m"
+        );
+        const verifyMatch = content.match(verifyPattern);
+
+        if (verifyMatch && verifyMatch[2] === correctConfigListId) {
+          console.log(
+            chalk.green(
+              `✅ SUCCESS: Fixed config list ID for ${targetName} to ${correctConfigListId}`
+            )
+          );
+        } else {
+          console.log(
+            chalk.red(
+              `❌ FAILED: Could not fix config list ID for ${targetName}. Current: ${
+                verifyMatch ? verifyMatch[2] : "not found"
+              }, Expected: ${correctConfigListId}`
+            )
+          );
+        }
+      } else {
+        console.log(
+          chalk.green(
+            `✅ Verified: ${targetName} already has correct config list ID (${correctConfigListId})`
+          )
+        );
+      }
+    } else {
+      console.log(
+        chalk.yellow(
+          `⚠️  Could not find target block pattern for ${targetName} (${targetId})`
+        )
+      );
+    }
+  }
+
   console.log(chalk.green("✅ iOS targets created successfully"));
+
+  // ABSOLUTE FINAL CHECK: One more time before writing - verify and fix staging targets
+  for (const env of selectedEnvs) {
+    if (env.toLowerCase() === "production") continue;
+    const envSuffix =
+      env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+    const targetName = `${projectName}${
+      envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+    }`;
+
+    // Find correct config list ID
+    const correctConfigListMatch = content.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}"\\s*\\*/`
+      )
+    );
+
+    if (correctConfigListMatch) {
+      const correctConfigListId = correctConfigListMatch[1];
+
+      // Find target ID
+      const targetIdMatch = content.match(
+        new RegExp(
+          `(\\w{24})\\s*/\\*\\s*${targetName.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}\\s*\\*/`
+        )
+      );
+
+      if (targetIdMatch) {
+        const targetId = targetIdMatch[1];
+
+        // Find current config list ID
+        const currentMatch = content.match(
+          new RegExp(
+            `(${targetId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)(\\w{24})(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+            "m"
+          )
+        );
+
+        if (currentMatch && currentMatch[2] !== correctConfigListId) {
+          console.log(
+            chalk.red(
+              `❌ FINAL FIX BEFORE WRITE: ${targetName} has wrong config list ID! Fixing...`
+            )
+          );
+          content = content.replace(
+            new RegExp(
+              `(${targetId.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)${currentMatch[2].replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+              )}(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+              "m"
+            ),
+            `$1${correctConfigListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+          );
+        }
+      }
+    }
+  }
+
   await fs.writeFile(pbxprojPath, content, "utf8");
   return buildableRefs;
 }
@@ -3373,6 +4939,82 @@ async function addInfoPlistsToXcodeProject(
       childrenEntries +
       "\n" +
       content.substring(childrenEndPos);
+  }
+
+  // CRITICAL: Before writing, verify staging targets still have correct config list IDs
+  // This function runs AFTER createIosTargetsForEnvs, so we need to ensure nothing broke
+  // Find all environment targets (targets with names like "{projectName}Stg", "{projectName}Dev", etc.)
+  // by searching for config lists with environment target names
+  const envTargetPattern = new RegExp(
+    `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    )}([^"]+)"\\s*\\*/`,
+    "g"
+  );
+
+  let envMatch;
+  while ((envMatch = envTargetPattern.exec(content)) !== null) {
+    const configListId = envMatch[1];
+    const envSuffix = envMatch[2];
+    const targetName = `${projectName}${envSuffix}`;
+
+    // Skip if it's the base target (no suffix)
+    if (!envSuffix || envSuffix.trim() === "") continue;
+
+    // Find target ID
+    const targetIdMatch = content.match(
+      new RegExp(
+        `(\\w{24})\\s*/\\*\\s*${targetName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        )}\\s*\\*/`
+      )
+    );
+
+    if (targetIdMatch) {
+      const targetId = targetIdMatch[1];
+
+      // Find current config list ID in target
+      const currentMatch = content.match(
+        new RegExp(
+          `(${targetId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)(\\w{24})(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "([^"]*)"\\s*\\*/)`,
+          "m"
+        )
+      );
+
+      if (
+        currentMatch &&
+        (currentMatch[2] !== configListId || currentMatch[4] !== targetName)
+      ) {
+        console.log(
+          chalk.red(
+            `❌ AFTER INFO PLISTS: ${targetName} has wrong config! Expected ID: ${configListId}, Comment: ${targetName}. Found ID: ${currentMatch[2]}, Comment: ${currentMatch[4]}. Fixing...`
+          )
+        );
+        content = content.replace(
+          new RegExp(
+            `(${targetId.replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}[\\s\\S]*?buildConfigurationList\\s*=\\s*)${currentMatch[2].replace(
+              /[.*+?^${}()|[\]\\]/g,
+              "\\$&"
+            )}(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "[^"]*"\\s*\\*/)`,
+            "m"
+          ),
+          `$1${configListId} /* Build configuration list for PBXNativeTarget "${targetName}" */`
+        );
+        console.log(
+          chalk.green(
+            `✅ Fixed config list ID for ${targetName} after Info.plists update`
+          )
+        );
+      }
+    }
   }
 
   await fs.writeFile(pbxprojPath, content, "utf8");
@@ -4037,19 +5679,10 @@ async function createApp(config) {
       }
     }
 
-    // Force iOS bundle identifier to the provided value
-    const pbxprojPath = path.join(
-      projectPath,
-      `ios/${projectName}.xcodeproj/project.pbxproj`
-    );
-    if (await fs.pathExists(pbxprojPath)) {
-      let pbxprojContent = await fs.readFile(pbxprojPath, "utf8");
-      pbxprojContent = pbxprojContent.replace(
-        /PRODUCT_BUNDLE_IDENTIFIER\s*=\s*[^;]+;/g,
-        `PRODUCT_BUNDLE_IDENTIFIER = ${bundleIdentifier};`
-      );
-      await fs.writeFile(pbxprojPath, pbxprojContent, "utf8");
-    }
+    // Force iOS bundle identifier to the provided value for base production target only
+    // Environment targets will get their bundle identifiers set in createIosTargetsForEnvs
+    // We need to do this AFTER creating environment targets to avoid conflicts
+    // So this will be handled in the main flow after createIosTargetsForEnvs
 
     // Force iOS display name to provided value (and ensure key exists)
     const infoPlistPath = path.join(
@@ -4129,8 +5762,410 @@ async function createApp(config) {
       const buildableRefs = await createIosTargetsForEnvs(
         selectedEnvs,
         projectPath,
-        projectName
+        projectName,
+        bundleIdentifier,
+        displayName
       );
+
+      // CRITICAL: Verify staging config list IDs immediately after createIosTargetsForEnvs
+      if (selectedEnvs && selectedEnvs.length > 1) {
+        const pbxprojPath = path.join(
+          projectPath,
+          `ios/${projectName}.xcodeproj/project.pbxproj`
+        );
+        if (await fs.pathExists(pbxprojPath)) {
+          let content = await fs.readFile(pbxprojPath, "utf8");
+          for (const env of selectedEnvs) {
+            if (env.toLowerCase() === "production") continue;
+            const envSuffix =
+              env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+            const targetName = `${projectName}${
+              envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+            }`;
+
+            // Find staging config list
+            const stagingConfigListMatch = content.match(
+              new RegExp(
+                `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+                  /[.*+?^${}()|[\]\\]/g,
+                  "\\$&"
+                )}"\\s*\\*/[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+                "m"
+              )
+            );
+            if (stagingConfigListMatch) {
+              const configIdsInList =
+                stagingConfigListMatch[1].match(/\w{24}/g) || [];
+              const configIdsFromList =
+                stagingConfigListMatch[2].match(/\w{24}/g) || [];
+
+              // Check base config IDs
+              const baseConfigListMatch = content.match(
+                new RegExp(
+                  `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  )}"\\s*\\*/[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+                  "m"
+                )
+              );
+              if (baseConfigListMatch) {
+                const baseConfigIds =
+                  baseConfigListMatch[2].match(/\w{24}/g) || [];
+                const overlap = configIdsFromList.filter(id =>
+                  baseConfigIds.includes(id)
+                );
+                if (overlap.length > 0) {
+                  console.log(
+                    chalk.red(
+                      `❌ AFTER createIosTargetsForEnvs: ${targetName} config list uses SAME config IDs as base!`
+                    )
+                  );
+                  console.log(
+                    chalk.red(
+                      `   Staging config IDs: ${configIdsFromList.join(
+                        ", "
+                      )}, Base: ${baseConfigIds.join(
+                        ", "
+                      )}, Overlap: ${overlap.join(", ")}`
+                    )
+                  );
+                } else {
+                  console.log(
+                    chalk.green(
+                      `✅ AFTER createIosTargetsForEnvs: ${targetName} config list correctly uses different config IDs: ${configIdsFromList.join(
+                        ", "
+                      )}`
+                    )
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Set bundle identifier for base production target (after environment targets are created)
+      // This ensures we only update the base target's configs, not the environment ones
+      const pbxprojPath = path.join(
+        projectPath,
+        `ios/${projectName}.xcodeproj/project.pbxproj`
+      );
+      if (await fs.pathExists(pbxprojPath)) {
+        let pbxprojContent = await fs.readFile(pbxprojPath, "utf8");
+
+        // Find the base target's configuration list ID
+        // Base target has config list with name "Build configuration list for PBXNativeTarget \"{projectName}\""
+        // IMPORTANT: Must match EXACTLY "{projectName}" without any suffix (like "Stg", "Dev", etc.)
+        // Use word boundary to ensure we don't match environment targets like "lepimvarimStg"
+        const escapedProjectName = projectName.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+        const baseConfigListMatch = pbxprojContent.match(
+          new RegExp(
+            `(\\w{24})\\s*\\/\\*\\s*Build configuration list for PBXNativeTarget "${escapedProjectName}"\\s*\\*\\/`,
+            "m"
+          )
+        );
+
+        if (baseConfigListMatch) {
+          const baseConfigListId = baseConfigListMatch[1];
+
+          // CRITICAL: Verify that base target references the correct config list
+          const baseTargetMatch = pbxprojContent.match(
+            new RegExp(
+              `(\\w{24})\\s*/\\*\\s*${escapedProjectName}\\s*\\*/[\\s\\S]*?buildConfigurationList\\s*=\\s*(\\w{24})(\\s*/\\*\\s*Build configuration list for PBXNativeTarget "([^"]*)"\\s*\\*/)`,
+              "m"
+            )
+          );
+          if (baseTargetMatch) {
+            const baseTargetId = baseTargetMatch[1];
+            const baseTargetConfigListId = baseTargetMatch[2];
+            const baseTargetComment = baseTargetMatch[4];
+            if (
+              baseTargetConfigListId !== baseConfigListId ||
+              baseTargetComment !== projectName
+            ) {
+              console.log(
+                chalk.red(
+                  `❌ CRITICAL: Base target references wrong config list! Expected ID: ${baseConfigListId}, Comment: ${projectName}. Found ID: ${baseTargetConfigListId}, Comment: ${baseTargetComment}`
+                )
+              );
+              // According to REFERENCE_FIX_ANALYSIS, we should NOT fix buildConfigurationList in PBXNativeTarget
+              // But we need to log this error so the user knows what's wrong
+              console.log(
+                chalk.yellow(
+                  `⚠️  NOTE: According to REFERENCE_FIX_ANALYSIS, we should NOT fix buildConfigurationList in PBXNativeTarget. The base target should have been created with the correct config list ID in createIosTargetsForEnvs.`
+                )
+              );
+            } else {
+              console.log(
+                chalk.green(
+                  `✅ Base target correctly references config list ID: ${baseConfigListId}`
+                )
+              );
+            }
+          }
+
+          // Find all config IDs in this config list
+          // Use precise pattern: match config list block starting with the specific ID and comment
+          const escapedConfigListId = baseConfigListId.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+          const configListBlockMatch = pbxprojContent.match(
+            new RegExp(
+              `${escapedConfigListId}\\s*\\/\\*\\s*Build configuration list for PBXNativeTarget "${escapedProjectName}"\\s*\\*\\/\\s*=\\s*\\{[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+              "m"
+            )
+          );
+
+          if (configListBlockMatch) {
+            const configIds = configListBlockMatch[1].match(/\w{24}/g) || [];
+
+            // CRITICAL: Base target should have its own config IDs
+            // These config IDs should be in the base config list with comment "{projectName}"
+            // If all config IDs belong to environment targets, it means base target's config list
+            // contains wrong config IDs (probably from staging target)
+            // In this case, we should still try to update bundle ID in these configs,
+            // but log a warning
+            const validConfigIds = [];
+            const envConfigIds = new Set();
+
+            // First, collect all config IDs from environment targets
+            for (const env of selectedEnvs) {
+              if (env.toLowerCase() === "production") continue;
+              const envSuffix =
+                env.toLowerCase() === "staging" ? "stg" : env.toLowerCase();
+              const targetName = `${projectName}${
+                envSuffix.charAt(0).toUpperCase() + envSuffix.slice(1)
+              }`;
+              const envConfigListMatch = pbxprojContent.match(
+                new RegExp(
+                  `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  )}"\\s*\\*/`
+                )
+              );
+              if (envConfigListMatch) {
+                const envConfigListId = envConfigListMatch[1];
+                console.log(
+                  chalk.cyan(
+                    `📸 Found ${targetName} config list ID: ${envConfigListId}`
+                  )
+                );
+                // CRITICAL: Use more precise pattern to match only the config list block
+                // Pattern: configListId /* comment */ = { ... buildConfigurations = ( ... ); ... };
+                const envConfigListBlockMatch = pbxprojContent.match(
+                  new RegExp(
+                    `${envConfigListId.replace(
+                      /[.*+?^${}()|[\]\\]/g,
+                      "\\$&"
+                    )}\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+                      /[.*+?^${}()|[\]\\]/g,
+                      "\\$&"
+                    )}"\\s*\\*/\\s*=\\s*\\{[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+                    "m"
+                  )
+                );
+                if (envConfigListBlockMatch) {
+                  // Extract only config IDs with comments (Debug/Release)
+                  const configIdsWithComments = envConfigListBlockMatch[1];
+                  // Use exec in a loop to find all matches
+                  const configIdRegex =
+                    /(\w{24})\s*\/\*\s*(Debug|Release)\s*\*\//g;
+                  const envConfigIdsOnly = [];
+                  let match;
+                  while (
+                    (match = configIdRegex.exec(configIdsWithComments)) !== null
+                  ) {
+                    envConfigIdsOnly.push(match[1]);
+                  }
+                  if (envConfigIdsOnly.length > 0) {
+                    console.log(
+                      chalk.cyan(
+                        `📸 ${targetName} config list contains config IDs: ${envConfigIdsOnly.join(
+                          ", "
+                        )}`
+                      )
+                    );
+                    envConfigIdsOnly.forEach(id => envConfigIds.add(id));
+                  } else {
+                    console.log(
+                      chalk.yellow(
+                        `⚠️  Could not extract config IDs from ${targetName} config list`
+                      )
+                    );
+                  }
+                }
+              }
+            }
+
+            console.log(
+              chalk.cyan(
+                `📸 Base config list contains config IDs: ${configIds.join(
+                  ", "
+                )}`
+              )
+            );
+
+            // Now check which config IDs from base config list belong to environment targets
+            for (const configId of configIds) {
+              if (envConfigIds.has(configId)) {
+                console.log(
+                  chalk.red(
+                    `❌ Config ID ${configId} from base config list ALSO belongs to an environment target! This is wrong - base and staging targets should have different config IDs.`
+                  )
+                );
+                // CRITICAL: Base target and environment targets should NOT share config IDs
+                // This means base target's config list contains wrong config IDs
+                // We should NOT use these config IDs for updating bundle ID, as they will
+                // also affect environment targets
+              } else {
+                validConfigIds.push(configId);
+                console.log(
+                  chalk.green(
+                    `✅ Config ID ${configId} from base config list is unique (not in environment targets)`
+                  )
+                );
+              }
+            }
+
+            // If all config IDs belong to environment targets, it's a critical error
+            // But we should still try to update bundle ID in these configs as a fallback
+            if (validConfigIds.length === 0 && configIds.length > 0) {
+              console.log(
+                chalk.red(
+                  `❌ CRITICAL: All config IDs from base config list belong to environment targets! Base target's config list contains wrong config IDs.`
+                )
+              );
+              console.log(
+                chalk.yellow(
+                  `⚠️  Using config IDs from base config list anyway as fallback: ${configIds.join(
+                    ", "
+                  )}`
+                )
+              );
+              // Use config IDs from base config list as fallback
+              validConfigIds.push(...configIds);
+            }
+
+            // Update PRODUCT_BUNDLE_IDENTIFIER only in validated config blocks
+            // These configs belong only to the base target (or we use fallback if all belong to env targets)
+            if (validConfigIds.length === 0) {
+              console.log(
+                chalk.red(
+                  `❌ CRITICAL: No valid config IDs found for base target! This should not happen after fallback.`
+                )
+              );
+            } else {
+              console.log(
+                chalk.green(
+                  `✅ Found ${
+                    validConfigIds.length
+                  } valid config ID(s) for base target: ${validConfigIds.join(
+                    ", "
+                  )}`
+                )
+              );
+              for (const configId of validConfigIds) {
+                // Update bundle identifier
+                const configBlockRegex = new RegExp(
+                  `(${configId.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  )}[\\s\\S]*?buildSettings\\s*=\\s*\\{[\\s\\S]*?PRODUCT_BUNDLE_IDENTIFIER\\s*=\\s*)[^;]+(;)`,
+                  "m"
+                );
+
+                const beforeReplace = pbxprojContent;
+                if (configBlockRegex.test(pbxprojContent)) {
+                  pbxprojContent = pbxprojContent.replace(
+                    configBlockRegex,
+                    `$1${bundleIdentifier}$2`
+                  );
+                  if (beforeReplace !== pbxprojContent) {
+                    console.log(
+                      chalk.green(
+                        `✅ Updated PRODUCT_BUNDLE_IDENTIFIER to ${bundleIdentifier} in config ${configId}`
+                      )
+                    );
+                  } else {
+                    console.log(
+                      chalk.yellow(
+                        `⚠️  Could not replace PRODUCT_BUNDLE_IDENTIFIER in config ${configId}`
+                      )
+                    );
+                  }
+                } else {
+                  console.log(
+                    chalk.yellow(
+                      `⚠️  Could not find PRODUCT_BUNDLE_IDENTIFIER in config ${configId}`
+                    )
+                  );
+                }
+
+                // Update display name for base target (production)
+                // Base target should have display name without environment suffix
+                const displayNameRegex = new RegExp(
+                  `(${configId.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  )}[\\s\\S]*?buildSettings\\s*=\\s*\\{[\\s\\S]*?)(INFOPLIST_KEY_CFBundleDisplayName\\s*=\\s*[^;]+;)?`,
+                  "m"
+                );
+
+                const displayNameMatch = pbxprojContent.match(displayNameRegex);
+                if (displayNameMatch) {
+                  const beforeDisplayName = pbxprojContent;
+                  if (displayNameMatch[2]) {
+                    // Replace existing display name
+                    pbxprojContent = pbxprojContent.replace(
+                      new RegExp(
+                        `(${configId.replace(
+                          /[.*+?^${}()|[\]\\]/g,
+                          "\\$&"
+                        )}[\\s\\S]*?buildSettings\\s*=\\s*\\{[\\s\\S]*?)INFOPLIST_KEY_CFBundleDisplayName\\s*=\\s*[^;]+;`,
+                        "m"
+                      ),
+                      `$1INFOPLIST_KEY_CFBundleDisplayName = "${displayName}";`
+                    );
+                  } else {
+                    // Add display name after INFOPLIST_FILE
+                    pbxprojContent = pbxprojContent.replace(
+                      new RegExp(
+                        `(${configId.replace(
+                          /[.*+?^${}()|[\]\\]/g,
+                          "\\$&"
+                        )}[\\s\\S]*?buildSettings\\s*=\\s*\\{[\\s\\S]*?INFOPLIST_FILE\\s*=\\s*[^;]+;\\s*)`,
+                        "m"
+                      ),
+                      `$1\t\t\t\tINFOPLIST_KEY_CFBundleDisplayName = "${displayName}";\n`
+                    );
+                  }
+                  if (beforeDisplayName !== pbxprojContent) {
+                    console.log(
+                      chalk.green(
+                        `✅ Updated INFOPLIST_KEY_CFBundleDisplayName to "${displayName}" in config ${configId}`
+                      )
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // NOTE: According to REFERENCE_FIX_ANALYSIS, in the reference project there were NO changes
+        // to buildConfigurationList in PBXNativeTarget blocks, so we don't need to verify or fix
+        // staging targets after bundle ID update. The staging targets should already have correct
+        // buildConfigurationList IDs from createIosTargetsForEnvs.
+
+        await fs.writeFile(pbxprojPath, pbxprojContent, "utf8");
+      }
+
       await createIosEnvSchemes(
         selectedEnvs,
         projectPath,

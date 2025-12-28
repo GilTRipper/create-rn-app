@@ -1,6 +1,11 @@
 import {
   getRemoteConfig,
   setCustomSignals,
+  setDefaults,
+  fetch as fetchConfig,
+  fetchAndActivate,
+  getAll,
+  getValue,
 } from "@react-native-firebase/remote-config";
 
 import type { Analytics } from "~/lib/analytics/implementation";
@@ -26,8 +31,8 @@ export class RemoteConfig implements RemoteConfigInterface {
   }
 
   private async fetch() {
-    await this.config.fetch(0);
-    await this.config.fetchAndActivate();
+    await fetchConfig(this.config, 0);
+    await fetchAndActivate(this.config);
   }
 
   private async setPropertiesOrSignals(options: RemoteConfigOptions) {
@@ -46,7 +51,7 @@ export class RemoteConfig implements RemoteConfigInterface {
   private async setDefaultValue(
     defaults: Record<string, string | number | boolean>
   ) {
-    await this.config.setDefaults(defaults);
+    await setDefaults(this.config, defaults);
   }
 
   private async prepareAndGetValue(
@@ -63,7 +68,7 @@ export class RemoteConfig implements RemoteConfigInterface {
 
     await this.fetch();
 
-    const result = this.config.getValue(value);
+    const result = getValue(this.config, value);
 
     return result;
   }
@@ -105,7 +110,7 @@ export class RemoteConfig implements RemoteConfigInterface {
 
     await this.fetch();
 
-    return this.config.getAll();
+    return getAll(this.config);
   }
 
   public async getAllJSON<
