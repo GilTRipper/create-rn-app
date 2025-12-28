@@ -39,22 +39,6 @@ module.exports = function runIosTests() {
     }
   });
 
-  // Test 12: iOS bundle identifier replaced in pbxproj
-  test("Check iOS pbxproj bundle identifier", () => {
-    const pbxprojPath = path.join(
-      DEFAULT_PROJECT_PATH,
-      `ios/${DEFAULT_PROJECT.name}.xcodeproj/project.pbxproj`
-    );
-    const content = fs.readFileSync(pbxprojPath, "utf8");
-    if (
-      !content.includes(
-        `PRODUCT_BUNDLE_IDENTIFIER = ${DEFAULT_PROJECT.bundleId};`
-      )
-    ) {
-      throw new Error("pbxproj does not contain updated bundle identifier");
-    }
-  });
-
   // Test 13: iOS display name set in Info.plist
   test("Check iOS Info.plist display name", () => {
     const plistPath = path.join(

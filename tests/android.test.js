@@ -85,11 +85,13 @@ module.exports = function runAndroidTests() {
       throw new Error("applicationId not found in defaultConfig");
     }
 
-    const applicationId = applicationIdMatch[1];
+    const defaultApplicationId = applicationIdMatch[1];
 
-    if (applicationId !== DEFAULT_PROJECT.bundleId) {
+    // If flavors exist, defaultConfig applicationId should still match bundleId
+    // (flavors will override it, but defaultConfig should still be correct)
+    if (defaultApplicationId !== DEFAULT_PROJECT.bundleId) {
       throw new Error(
-        `Expected applicationId "${DEFAULT_PROJECT.bundleId}", got "${applicationId}"`
+        `Expected applicationId in defaultConfig "${DEFAULT_PROJECT.bundleId}", got "${defaultApplicationId}"`
       );
     }
 

@@ -83,6 +83,56 @@ module.exports = function runEnvironmentTests() {
         throw new Error("envConfigFiles block found but format is invalid");
       }
 
+      // Check that matchingFallbacks exists in buildTypes (required for productFlavors)
+      if (!content.includes("matchingFallbacks")) {
+        throw new Error(
+          "build.gradle has productFlavors but missing matchingFallbacks in buildTypes"
+        );
+      }
+
+      // Check that each flavor has unique applicationId
+      const flavorMatches = content.match(
+        /(\w+)\s*\{[\s\S]*?applicationId\s+"([^"]+)"/g
+      );
+      if (flavorMatches && flavorMatches.length > 1) {
+        const applicationIds = flavorMatches
+          .map(match => {
+            const appIdMatch = match.match(/applicationId\s+"([^"]+)"/);
+            return appIdMatch ? appIdMatch[1] : null;
+          })
+          .filter(Boolean);
+
+        // Check for duplicates (production should have base, others should have suffixes)
+        const uniqueIds = new Set(applicationIds);
+        if (uniqueIds.size !== applicationIds.length) {
+          throw new Error(
+            `Duplicate applicationId found in flavors. All flavors must have unique applicationId`
+          );
+        }
+
+        // Check that non-production flavors have suffixes
+        const productionFlavor = content.match(
+          /production\s*\{[\s\S]*?applicationId\s+"([^"]+)"/m
+        );
+        const stagingFlavor = content.match(
+          /staging\s*\{[\s\S]*?applicationId\s+"([^"]+)"/m
+        );
+        if (productionFlavor && stagingFlavor) {
+          const prodAppId = productionFlavor[1];
+          const stagingAppId = stagingFlavor[1];
+          if (prodAppId === stagingAppId) {
+            throw new Error(
+              `Production and staging flavors have the same applicationId: ${prodAppId}. They must be different.`
+            );
+          }
+          if (!stagingAppId.includes(prodAppId)) {
+            throw new Error(
+              `Staging applicationId "${stagingAppId}" should be based on production "${prodAppId}" with a suffix`
+            );
+          }
+        }
+      }
+
       // Check for environment source directories (optional - only for non-production)
       const srcDir = path.join(DEFAULT_PROJECT_PATH, "android/app/src");
       if (fs.existsSync(srcDir)) {
@@ -90,7 +140,32 @@ module.exports = function runEnvironmentTests() {
         const envDirs = srcDirs.filter(dir =>
           ["local", "development", "staging"].includes(dir.toLowerCase())
         );
-        // If environment setup was used, should have at least one env directory (if non-production envs selected)
+
+        // If environment directories exist, check that they have strings.xml with correct app_name
+        for (const envDir of envDirs) {
+          const envStringsPath = path.join(
+            srcDir,
+            envDir,
+            "res/values/strings.xml"
+          );
+          if (fs.existsSync(envStringsPath)) {
+            const stringsContent = fs.readFileSync(envStringsPath, "utf8");
+            const appNameMatch = stringsContent.match(
+              /<string name="app_name">([^<]+)<\/string>/
+            );
+            if (appNameMatch) {
+              const appName = appNameMatch[1];
+              // Check that app_name contains environment suffix
+              const envSuffix =
+                envDir.charAt(0).toUpperCase() + envDir.slice(1);
+              if (!appName.includes(envSuffix)) {
+                throw new Error(
+                  `Environment ${envDir} app_name "${appName}" should contain environment suffix "${envSuffix}"`
+                );
+              }
+            }
+          }
+        }
       }
     }
     // If envConfigFiles doesn't exist, environment setup wasn't used - test passes
@@ -133,7 +208,6 @@ module.exports = function runEnvironmentTests() {
       file =>
         file.includes("Local") ||
         file.includes("Dev") ||
-        file.includes("Stg") ||
         file.includes("Development") ||
         file.includes("Staging")
     );
@@ -212,7 +286,7 @@ module.exports = function runEnvironmentTests() {
             `Script ${scriptKey} should reference development mode`
           );
         }
-        if (scriptKey.includes("stg") && !scriptValue.includes("staging")) {
+        if (scriptKey.includes("staging") && !scriptValue.includes("staging")) {
           throw new Error(`Script ${scriptKey} should reference staging mode`);
         }
       }
@@ -353,12 +427,11 @@ module.exports = function runEnvironmentTests() {
       );
     }
 
-    // Check that there are no environment-specific schemes (Local, Dev, Stg, etc.)
+    // Check that there are no environment-specific schemes (Local, Dev, Staging, etc.)
     const envSchemes = schemeFiles.filter(
       file =>
         file.includes("Local") ||
         file.includes("Dev") ||
-        file.includes("Stg") ||
         file.includes("Development") ||
         file.includes("Staging")
     );
