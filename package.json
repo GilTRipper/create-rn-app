@@ -1,6 +1,6 @@
 {
   "name": "@giltripper/create-rn-app",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "CLI tool to create a new React Native app with pre-configured setup",
   "main": "src/index.js",
   "bin": {
