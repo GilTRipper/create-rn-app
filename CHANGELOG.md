@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.3] - 2025-12-16
+
+### Fixed
+- **iOS splash screen storyboard**: Fixed bug where splash screen images were copied to assets but not properly configured in `BootSplash.storyboard`. The storyboard template now includes the correct structure with ImageView, constraints, and image resource reference, matching the working implementation pattern
+- **Splash screen storyboard update**: Added automatic update of image dimensions in `BootSplash.storyboard` after copying splash screen images, ensuring proper image sizing in the storyboard resources section
+
 ## [1.1.2] - 2025-12-16
 
 ### Fixed
