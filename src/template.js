@@ -4343,6 +4343,67 @@ async function createIosTargetsForEnvs(
   await fs.writeFile(pbxprojPath, content, "utf8");
   return buildableRefs;
 }
+// Helper function to read PNG dimensions
+function getPngDimensions(buffer) {
+  // PNG format: 8-byte signature + IHDR chunk
+  // IHDR chunk: width (4 bytes) at offset 16, height (4 bytes) at offset 20
+  if (buffer.length < 24) {
+    return null;
+  }
+
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  return { width, height };
+}
+
+// Function to update BootSplash.storyboard with splash screen image dimensions
+async function updateBootSplashStoryboard(projectPath, projectName) {
+  const storyboardPath = path.join(
+    projectPath,
+    `ios/${projectName}/BootSplash.storyboard`
+  );
+
+  if (!(await fs.pathExists(storyboardPath))) {
+    return;
+  }
+
+  try {
+    const splashImagePath = path.join(
+      projectPath,
+      `ios/${projectName}/Images.xcassets/SplashScreen.imageset/SplashScreen.png`
+    );
+
+    // Try to read image dimensions, fallback to default if not available
+    let imageWidth = 375;
+    let imageHeight = 812;
+
+    if (await fs.pathExists(splashImagePath)) {
+      try {
+        const imageBuffer = await fs.readFile(splashImagePath);
+        const dimensions = getPngDimensions(imageBuffer);
+        if (dimensions) {
+          imageWidth = dimensions.width;
+          imageHeight = dimensions.height;
+        }
+      } catch (error) {
+        // If we can't read dimensions, use defaults
+      }
+    }
+
+    let storyboardContent = await fs.readFile(storyboardPath, "utf8");
+
+    // Update image resource dimensions
+    storyboardContent = storyboardContent.replace(
+      /(<image name="SplashScreen")\s+width="\d+"\s+height="\d+"(\/>)/,
+      `$1 width="${imageWidth}" height="${imageHeight}"$2`
+    );
+
+    await fs.writeFile(storyboardPath, storyboardContent, "utf8");
+  } catch (error) {
+    // Silently fail - storyboard structure is already correct in template
+  }
+}
+
 async function copySplashScreenImages(
   splashScreenDir,
   projectPath,
@@ -4392,6 +4453,8 @@ async function copySplashScreenImages(
       }
 
       spinner.succeed("Using blank default splash screens");
+      // Update storyboard even for blank placeholders
+      await updateBootSplashStoryboard(projectPath, projectName);
       return;
     }
 
@@ -4470,6 +4533,9 @@ async function copySplashScreenImages(
               path.join(iosSplashPath, "SplashScreen@3x.png")
             );
           }
+
+          // Update BootSplash.storyboard after copying iOS images
+          await updateBootSplashStoryboard(projectPath, projectName);
         }
       }
 
@@ -4622,6 +4688,9 @@ async function copySplashScreenImages(
           path.join(iosSplashPath, "SplashScreen@3x.png")
         );
       }
+
+      // Update BootSplash.storyboard after copying iOS images
+      await updateBootSplashStoryboard(projectPath, projectName);
     }
 
     // Copy Android images

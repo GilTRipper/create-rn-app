@@ -77,7 +77,6 @@ module.exports = [
               position: "after",
             },
           ],
-          alphabetize: { order: "asc" },
         },
       ],
 
@@ -113,7 +112,7 @@ module.exports = [
       "no-relative-import-paths/no-relative-import-paths": [
         "error",
         {
-          rootDir: "mobile/src",
+          rootDir: "src",
           allowSameFolder: true,
           prefix: "~",
         },
