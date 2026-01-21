@@ -559,6 +559,56 @@ async function getPrompts(projectNameArg, options) {
         defaultLanguage: defaultLanguage,
         withRemoteConfig,
       };
+
+      // If localization is enabled but zustand storage is not, offer it again
+      if (!zustandStorageEnabled) {
+        const { enableZustandForLocalization } = await inquirer.prompt([
+          {
+            type: "confirm",
+            name: "enableZustandForLocalization",
+            message:
+              "Localization requires storage to persist language selection. Do you want to enable Zustand storage? (If no, we'll use a simple context without persistence)",
+            default: true,
+          },
+        ]);
+
+        if (enableZustandForLocalization) {
+          zustandStorageEnabled = true;
+        }
+      }
+    }
+  }
+
+  // Theme setup (interactive only, after Localization)
+  let themeEnabled = false;
+
+  if (!options.yes) {
+    const { enableTheme } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "enableTheme",
+        message: "Do you want to set up theme support (light/dark/system themes)?",
+        default: false,
+      },
+    ]);
+
+    themeEnabled = enableTheme;
+
+    // If theme is enabled but zustand storage is not, offer it again
+    if (themeEnabled && !zustandStorageEnabled) {
+      const { enableZustandForTheme } = await inquirer.prompt([
+        {
+          type: "confirm",
+          name: "enableZustandForTheme",
+          message:
+            "Theme support requires storage to persist theme selection. Do you want to enable Zustand storage? (If no, we'll use a simple context without persistence)",
+          default: true,
+        },
+      ]);
+
+      if (enableZustandForTheme) {
+        zustandStorageEnabled = true;
+      }
     }
   }
 
@@ -649,6 +699,7 @@ async function getPrompts(projectNameArg, options) {
     zustandStorage: zustandStorageEnabled,
     navigationMode,
     localization,
+    theme: themeEnabled,
   };
 }
 

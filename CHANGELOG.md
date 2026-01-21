@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Theme support (optional)**: Added theme preset (`src/lib/theme`) with mock light/dark themes and `ThemeProvider` integration into `App.tsx`.
+- **Theme setup prompt**: Added an interactive prompt to enable theme support during project creation (pattern matches localization setup).
+
+### Changed
+- **Zustand storage prompt flow**: If user enables **theme** and/or **localization** without enabling Zustand storage, the CLI now prompts again to enable Zustand storage.
+- **No-store fallback**: If the user still declines Zustand storage, **theme** and **localization** are generated to work **without any store** (state is kept via `useState` inside their existing providers; no persistence).
+
 ## [1.1.3] - 2025-12-16
 
 ### Fixed

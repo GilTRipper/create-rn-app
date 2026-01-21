@@ -33,6 +33,7 @@ export type TranslationType = I18nContextProps;
 export type LocalizationContextProps = I18nContextProps & {
   initLocalization: () => Promise<void>;
   changeLanguage: (language: string) => void;
+  language: string;
 };
 
 export type LocalizationState = {

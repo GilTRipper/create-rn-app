@@ -292,10 +292,35 @@ async function copyLocalizationTemplate(projectPath) {
   console.log(chalk.green("✅ Copied localization template"));
 }
 
+async function copyThemeTemplate(projectPath) {
+  const sourceThemePath = path.join(
+    __dirname,
+    "../template-presets/theme"
+  );
+
+  if (!(await fs.pathExists(sourceThemePath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Theme template directory not found: ${sourceThemePath}. Skipping theme template copy.`
+      )
+    );
+    return;
+  }
+
+  const targetThemePath = path.join(projectPath, "src/lib/theme");
+  await fs.ensureDir(path.dirname(targetThemePath));
+
+  await fs.copy(sourceThemePath, targetThemePath, {
+    overwrite: true,
+  });
+  console.log(chalk.green("✅ Copied theme template"));
+}
+
 async function configureLocalization(
   projectPath,
   defaultLanguage,
-  withRemoteConfig = false
+  withRemoteConfig = false,
+  useZustand = true
 ) {
   const lang = String(defaultLanguage || "ru").trim();
   const targetLocalizationPath = path.join(projectPath, "src/lib/localization");
@@ -359,51 +384,72 @@ const deepMerge = <T extends Record<string, unknown>>(base: T, override: Record<
     : "";
 
   const initLocalizationBody = withRemoteConfig
-    ? `    let lng = language;
-
-    if (!lng) {
-      lng = getLocales()[0].languageCode;
-      setLanguage(lng);
+    ? `    if (isInitialized) {
+      return;
     }
 
-    // Get all localizations from Remote Config at once
-    const defaults: Record<string, string> = {
-      ${JSON.stringify(lang)}: JSON.stringify(translations),
-    };
+    let lng = language || ${JSON.stringify(lang)};
+    if (!language) {
+      setLanguage(${JSON.stringify(lang)});
+    }
 
+    // Load resources only from Remote Config
     const allRemoteLocalizations = await remoteConfig.getAllJSON<Record<string, typeof translations>>({
-      defaults,
+      defaults: {},
     });
 
-    // Collect resources for all languages from Remote Config
+    // Build resources object - use only Remote Config
     const resources: Record<string, { translation: typeof translations }> = {};
-
-    // Merge all localizations from Remote Config
     for (const [langCode, remoteTranslation] of Object.entries(allRemoteLocalizations)) {
-      if (langCode === ${JSON.stringify(lang)}) {
-        // For default language, merge with local file
-        resources[langCode] = {
-          translation: deepMerge(translations, remoteTranslation as unknown as Record<string, unknown>),
-        };
-      } else {
-        // For other languages, use only remote
+      if (remoteTranslation && Object.keys(remoteTranslation).length > 0) {
         resources[langCode] = { translation: remoteTranslation };
       }
     }
 
-    // If current language is ${JSON.stringify(
-      lang
-    )} and it's not in remote, use local
-    if (!resources[lng] && lng === ${JSON.stringify(lang)}) {
-      resources[lng] = { translation: translations };
+    // If no resources loaded, use local file as last resort
+    if (Object.keys(resources).length === 0) {
+      console.warn("No Remote Config resources found, using local file as fallback");
+      resources[${JSON.stringify(lang)}] = { translation: translations };
     }
 
-    // Add all resources to i18n and change language
+    if (!resources[lng]) {
+      lng = ${JSON.stringify(lang)};
+      setLanguage(${JSON.stringify(lang)});
+      if (!resources[lng]) {
+        resources[lng] = { translation: translations };
+      }
+    }
+
+    // Add resources from Remote Config only
     for (const [langCode, resource] of Object.entries(resources)) {
-      i18n.addResourceBundle(langCode, "translation", resource.translation, true, true);
+      // Remove if exists
+      if (i18n.hasResourceBundle(langCode, "translation")) {
+        i18n.removeResourceBundle(langCode, "translation");
+      }
+      // Clear from store
+      if (i18n.store.data[langCode]?.translation) {
+        delete i18n.store.data[langCode].translation;
+      }
+      // Add new resources
+      i18n.addResourceBundle(langCode, "translation", resource.translation, false, true);
     }
 
-    await i18n.changeLanguage(lng);`
+    // Disable fallback to prevent using local file
+    i18n.options.fallbackLng = false;
+
+    // Force language change to trigger re-render of all components
+    const currentLang = i18n.language;
+    if (currentLang === lng) {
+      await i18n.changeLanguage("en");
+      await new Promise<void>(resolve => setTimeout(resolve, 10));
+    }
+    await i18n.changeLanguage(lng);
+
+    // Emit event to force re-render of all useTranslation hooks
+    i18n.emit("languageChanged", lng);
+
+    setIsInitialized(true);
+    console.info("Localization initialized. Translation:", i18n.language);`
     : `    let lng = language;
 
     if (!lng) {
@@ -419,38 +465,57 @@ const deepMerge = <T extends Record<string, unknown>>(base: T, override: Record<
       interpolation: { escapeValue: false },
     });`;
 
-  const i18nInit = withRemoteConfig
-    ? `  const { language, setLanguage } = useLocalizationStore();
-  const { getLocales } = useLocalize();
+  const storeImport = useZustand
+    ? `import { useLocalizationStore } from "./store";`
+    : "";
 
-  // Initialize i18n synchronously with basic config before using useTranslation
+  const stateHook = useZustand
+    ? `  const { language, setLanguage } = useLocalizationStore();
+  const { getLocales } = useLocalize();`
+    : `  const { getLocales } = useLocalize();
+  const [language, setLanguageState] = useState<string>(() => {
+    return getLocales()[0]?.languageCode || ${JSON.stringify(lang)};
+  });
+  const setLanguage = (lang: string) => {
+    setLanguageState(lang);
+  };`;
+
+  const isInitializedState = withRemoteConfig
+    ? `  const [isInitialized, setIsInitialized] = React.useState(false);`
+    : "";
+
+  const i18nInit = withRemoteConfig
+    ? `${stateHook}
+${isInitializedState}
+
+  // Initialize i18n without resources - they will be loaded from Remote Config
   if (!i18n.isInitialized) {
     i18n
       .use(initReactI18next)
       .use(ICU)
       .init({
-        resources: { ${JSON.stringify(lang)}: { translation: translations } },
-        lng: language || getLocales()[0]?.languageCode || ${JSON.stringify(
-          lang
-        )},
-        fallbackLng: ${JSON.stringify(lang)},
+        resources: {},
+        lng: ${JSON.stringify(lang)},
+        fallbackLng: false, // No fallback - use only Remote Config
         interpolation: { escapeValue: false },
       });
   }
 
-  const { t: rawT } = useTranslation();`
-    : `  const { t: rawT } = useTranslation();
+  const { t: rawT, i18n: i18nInstance } = useTranslation();`
+    : `  const { t: rawT, i18n: i18nInstance } = useTranslation();
 
-  const { language, setLanguage } = useLocalizationStore();
-  const { getLocales } = useLocalize();`;
+${stateHook}`;
+
+  const useStateImport = useZustand ? "" : `import { useState } from "react";`;
 
   const providerContent = `import React, { createContext, useContext } from "react";
+${useStateImport}
 import i18n from "i18next";
 import ICU from "i18next-icu";
 import { initReactI18next, useTranslation } from "react-i18next";
 import { useLocalize } from "react-native-localize";
 import translations from "./languages/${lang}.json";
-import { useLocalizationStore } from "./store";
+${storeImport}
 ${remoteConfigImport}import type { I18nContextProps, LocalizationContextProps, TranslationComponents } from "./types";
 import type { ReactNode } from "react";
 
@@ -497,13 +562,66 @@ ${remoteConfigHook}
 ${initLocalizationBody}
   };
 
-  const changeLanguage = async (newLanguage: string) => {
-    await i18n.changeLanguage(newLanguage);
-    setLanguage(newLanguage);
+  const changeLanguage = async (targetLanguage: string) => {
+    try {
+      // Prevent multiple simultaneous language changes
+      if (i18n.language === targetLanguage) {
+        return;
+      }
+
+${withRemoteConfig ? `      // Check if resources exist for the target language
+      const hasResources = i18n.hasResourceBundle(targetLanguage, "translation");
+
+      if (!hasResources) {
+        // Load from Remote Config only
+        const allRemoteLocalizations = await remoteConfig.getAllJSON<Record<string, typeof translations>>({
+          defaults: {},
+        });
+
+        const remoteTranslation = allRemoteLocalizations[targetLanguage];
+        if (remoteTranslation && Object.keys(remoteTranslation).length > 0) {
+          i18n.addResourceBundle(targetLanguage, "translation", remoteTranslation, false, true);
+        } else {
+          // If no Remote Config, use local file as last resort
+          console.warn(\`No Remote Config for language: \${targetLanguage}, using local file\`);
+          if (targetLanguage === ${JSON.stringify(lang)}) {
+            i18n.addResourceBundle(${JSON.stringify(lang)}, "translation", translations, false, true);
+          } else {
+            // Fallback to ${JSON.stringify(lang)}
+            targetLanguage = ${JSON.stringify(lang)};
+            if (!i18n.hasResourceBundle(${JSON.stringify(lang)}, "translation")) {
+              i18n.addResourceBundle(${JSON.stringify(lang)}, "translation", translations, false, true);
+            }
+          }
+        }
+      }` : ""}
+
+      // Change language
+      await i18n.changeLanguage(targetLanguage);
+
+      // Only update store if language actually changed
+      if (i18n.language === targetLanguage) {
+        setLanguage(targetLanguage);
+      }
+    } catch (error) {
+      console.error("Error changing language:", error);
+    }
   };
 
+  // Use i18nInstance.language to ensure context updates when language changes
+  const contextValue = React.useMemo(
+    () => ({
+      t: rawT,
+      rich,
+      initLocalization,
+      changeLanguage,
+      language: i18nInstance.language || language,
+    }),
+    [rawT, rich, initLocalization, changeLanguage, i18nInstance.language, language],
+  );
+
   return (
-    <LocalizationContext.Provider value={{ t: rawT, rich, initLocalization, changeLanguage }}>{children}</LocalizationContext.Provider>
+    <LocalizationContext.Provider value={contextValue}>{children}</LocalizationContext.Provider>
   );
 };
 
@@ -543,6 +661,7 @@ export type TranslationType = I18nContextProps;
 export type LocalizationContextProps = I18nContextProps & {
   initLocalization: () => Promise<void>;
   changeLanguage: (language: string) => void;
+  language: string;
 };
 
 export type LocalizationState = {
@@ -551,7 +670,8 @@ export type LocalizationState = {
 };
 `;
 
-  const storeContent = `import { create } from "zustand";
+  const storeContent = useZustand
+    ? `import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { zustandStorage } from "~/lib/storage";
 import type { LocalizationState } from "~/lib/localization/types";
@@ -565,6 +685,9 @@ export const useLocalizationStore = create<LocalizationState>()(
     { name: "localization", storage: createJSONStorage(() => zustandStorage) },
   ),
 );
+`
+    : `// Store not needed - using useState in provider instead
+export {};
 `;
 
   await fs.writeFile(providerPath, providerContent, "utf8");
@@ -576,9 +699,56 @@ export const useLocalizationStore = create<LocalizationState>()(
   );
 }
 
+async function configureTheme(projectPath, useZustand = true) {
+  const targetThemePath = path.join(projectPath, "src/lib/theme");
+  const storePath = path.join(targetThemePath, "store/index.ts");
+  const providerPath = path.join(targetThemePath, "provider.tsx");
+
+  const storeContent = useZustand
+    ? `import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { zustandStorage } from "~/lib/storage";
+import type { ThemeState } from "../types";
+
+export const useThemeStore = create<ThemeState>()(
+  persist(
+    set => ({
+      theme: "system",
+      setTheme: theme => set({ theme }),
+    }),
+    { name: "theme", storage: createJSONStorage(() => zustandStorage) },
+  ),
+);
+`
+    : `// Store not needed - using useState in provider instead
+export {};
+`;
+
+  // Update provider to use useState if not using zustand
+  let providerContent = await fs.readFile(providerPath, "utf8");
+  if (!useZustand) {
+    // Remove import for useThemeStore from store
+    providerContent = providerContent.replace(
+      /import { useThemeStore } from "\.\/store";\n/g,
+      ""
+    );
+    // Replace useThemeStore with useState
+    providerContent = providerContent.replace(
+      /  const scheme = useColorScheme\(\);\n  const { theme: selectedTheme } = useThemeStore\(\);/,
+      `  const scheme = useColorScheme();
+  const [selectedTheme, setSelectedTheme] = useState("system");`
+    );
+  }
+
+  await fs.writeFile(storePath, storeContent, "utf8");
+  await fs.writeFile(providerPath, providerContent, "utf8");
+
+  console.log(chalk.green(`✅ Configured theme support (${useZustand ? "with Zustand storage" : "with simple state"})`));
+}
+
 async function updateAppTsxForSetup(
   projectPath,
-  { navigationMode, localizationEnabled }
+  { navigationMode, localizationEnabled, themeEnabled }
 ) {
   const appTsxPath = path.join(projectPath, "App.tsx");
 
@@ -591,7 +761,7 @@ async function updateAppTsxForSetup(
     return;
   }
 
-  if (navigationMode === "none" && !localizationEnabled) {
+  if (navigationMode === "none" && !localizationEnabled && !themeEnabled) {
     // Keep template App.tsx as-is
     return;
   }
@@ -612,13 +782,57 @@ async function updateAppTsxForSetup(
       : `  return (\n    <NavigationContainer>\n      <AppNavigator />\n    </NavigationContainer>\n  );`
     : `  return <View />;`;
 
-  if (localizationEnabled) {
+  // Build provider wrappers
+  const themeProviderImport = themeEnabled
+    ? 'import { ThemeProvider } from "~/lib/theme";\n'
+    : "";
+  const localizationProviderImport = localizationEnabled
+    ? 'import { LocalizationProvider, useLocalization } from "~/lib/localization";\n'
+    : "";
+
+  if (localizationEnabled && themeEnabled) {
+    // Both localization and theme
     const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-import { LocalizationProvider, useLocalization } from "~/lib/localization";
-${navigatorImport}
+${themeProviderImport}${localizationProviderImport}${navigatorImport}
+
+const AppContent = () => {
+  const { initLocalization } = useLocalization();
+
+  useEffect(() => {
+    const appBoot = async () => {
+      await initLocalization();
+      RNBootSplash.hide();
+    };
+    appBoot();
+  }, []);
+
+${contentJsx}
+};
+
+export const App = () => (
+  <ThemeProvider>
+    <LocalizationProvider>
+      <AppContent />
+    </LocalizationProvider>
+  </ThemeProvider>
+);
+`;
+
+    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
+    console.log(chalk.green("✅ Updated App.tsx (with ThemeProvider and LocalizationProvider)"));
+    return;
+  }
+
+  if (localizationEnabled) {
+    // Only localization
+    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+import { useEffect } from "react";
+import { View } from "react-native";
+import RNBootSplash from "react-native-bootsplash";
+${localizationProviderImport}${navigatorImport}
 
 const AppContent = () => {
   const { initLocalization } = useLocalization();
@@ -646,7 +860,33 @@ export const App = () => (
     return;
   }
 
-  // No localization: just hide splash on mount
+  if (themeEnabled) {
+    // Only theme
+    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+import { useEffect } from "react";
+import { View } from "react-native";
+import RNBootSplash from "react-native-bootsplash";
+${themeProviderImport}${navigatorImport}
+
+export const App = () => {
+  useEffect(() => {
+    RNBootSplash.hide();
+  }, []);
+
+  return (
+    <ThemeProvider>
+${contentJsx}
+    </ThemeProvider>
+  );
+};
+`;
+
+    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
+    console.log(chalk.green("✅ Updated App.tsx (with ThemeProvider)"));
+    return;
+  }
+
+  // No localization or theme: just hide splash on mount
   const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
 import { useEffect } from "react";
 import { View } from "react-native";
@@ -662,8 +902,8 @@ ${contentJsx}
 };
 `;
 
-  await fs.writeFile(appTsxPath, appTsxContent, "utf8");
-  console.log(chalk.green("✅ Updated App.tsx"));
+    await fs.writeFile(appTsxPath, appTsxContent, "utf8");
+    console.log(chalk.green("✅ Updated App.tsx"));
 }
 
 async function addFirebaseDependencies(
@@ -5561,6 +5801,7 @@ async function createApp(config) {
     zustandStorage = false,
     navigationMode = "none",
     localization = {},
+    theme = false,
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
@@ -5572,6 +5813,7 @@ async function createApp(config) {
   const googleMapsApiKey = maps?.googleMapsApiKey || null;
   const enableGoogleMaps = mapsProvider === "google-maps";
   const localizationEnabled = localization?.enabled || false;
+  const themeEnabled = theme || false;
   const localizationDefaultLanguage = localization?.defaultLanguage || "ru";
   const localizationWithRemoteConfig = localization?.withRemoteConfig || false;
 
@@ -6326,9 +6568,9 @@ async function createApp(config) {
     }
 
     // Create Zustand storage setup if selected OR if required by enabled features
-    // (auth store + localization store require zustandStorage)
+    // (auth store requires zustandStorage; localization/theme can work without it using simple context)
     const needsZustandStorage =
-      zustandStorage || navigationMode === "with-auth" || localizationEnabled;
+      zustandStorage || navigationMode === "with-auth";
     if (needsZustandStorage) {
       const libPath = path.join(projectPath, "src/lib");
       await fs.ensureDir(libPath);
@@ -6355,22 +6597,27 @@ export const zustandStorage: StateStorage = {
 
         if (
           !zustandStorage &&
-          (navigationMode === "with-auth" || localizationEnabled)
+          navigationMode === "with-auth"
         ) {
+          console.log(
+            chalk.green(
+              "✅ Created Zustand storage setup (required for auth navigation)"
+            )
+          );
+        } else if (zustandStorage && (localizationEnabled || themeEnabled)) {
           const reasons = [];
           if (navigationMode === "with-auth") reasons.push("auth navigation");
           if (localizationEnabled) reasons.push("localization");
+          if (themeEnabled) reasons.push("theme");
           console.log(
             chalk.green(
-              `✅ Created Zustand storage setup (required for ${reasons.join(
-                " + "
-              )})`
+              `✅ Created Zustand storage setup (for ${reasons.join(" + ")})`
             )
           );
         } else {
           console.log(chalk.green("✅ Created Zustand storage setup"));
         }
-      } else if (navigationMode === "with-auth" || localizationEnabled) {
+      } else if (navigationMode === "with-auth" || (zustandStorage && (localizationEnabled || themeEnabled))) {
         console.log(
           chalk.green(
             "✅ Zustand storage already exists (required for selected features)"
@@ -6397,7 +6644,8 @@ export const zustandStorage: StateStorage = {
       await configureLocalization(
         projectPath,
         localizationDefaultLanguage,
-        localizationWithRemoteConfig
+        localizationWithRemoteConfig,
+        zustandStorage
       );
 
       // If localization with remote-config is enabled, ensure remote-config module is copied
@@ -6426,10 +6674,17 @@ export const zustandStorage: StateStorage = {
       }
     }
 
-    // Update App.tsx if navigation and/or localization was selected
+    // Theme setup (optional)
+    if (themeEnabled) {
+      await copyThemeTemplate(projectPath);
+      await configureTheme(projectPath, zustandStorage);
+    }
+
+    // Update App.tsx if navigation and/or localization and/or theme was selected
     await updateAppTsxForSetup(projectPath, {
       navigationMode,
       localizationEnabled,
+      themeEnabled,
     });
 
     // Add GoogleServices folder/file to Xcode project (after all targets are created)
