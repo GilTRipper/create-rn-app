@@ -10,6 +10,7 @@ async function createProjectWithLocalization({
   displayName,
   defaultLanguage = "en",
   withRemoteConfig = false,
+  enableZustandForLocalization = true,
 }) {
   const projectPath = path.join("/tmp", name);
   const packageManager = testSetup.packageManager;
@@ -52,6 +53,12 @@ async function createProjectWithLocalization({
   answers += `${defaultLanguage}\n`;
   // With remote config?
   answers += `${withRemoteConfig ? "yes" : "no"}\n`;
+
+  // Follow-up: enable Zustand for localization? -> yes/no
+  answers += `${enableZustandForLocalization ? "yes" : "no"}\n`;
+
+  // Theme? -> no
+  answers += "no\n";
 
   // Overwrite? -> yes
   answers += "yes\n";
@@ -190,11 +197,56 @@ module.exports = async function runLocalizationTests() {
       bundleId: "com.test.localizationstorage",
       displayName: "Localization Storage",
       defaultLanguage: "en",
+      enableZustandForLocalization: true,
     });
 
     const storagePath = path.join(projectPath, "src/lib/storage.ts");
     if (!fs.existsSync(storagePath)) {
       throw new Error("src/lib/storage.ts should be created for localization");
+    }
+
+    cleanupPath(projectPath);
+  });
+
+  test("Check localization works without Zustand storage when user declines it", async () => {
+    const projectPath = await createProjectWithLocalization({
+      name: "test-localization-no-zustand",
+      bundleId: "com.test.localizationnozustand",
+      displayName: "Localization No Zustand",
+      defaultLanguage: "en",
+      enableZustandForLocalization: false,
+    });
+
+    const storagePath = path.join(projectPath, "src/lib/storage.ts");
+    if (fs.existsSync(storagePath)) {
+      throw new Error(
+        "src/lib/storage.ts should NOT be created when user declines Zustand for localization"
+      );
+    }
+
+    const localizationDir = path.join(projectPath, "src/lib/localization");
+    const providerPath = path.join(localizationDir, "provider.tsx");
+    const storePath = path.join(localizationDir, "store/index.ts");
+
+    if (!fs.existsSync(providerPath)) {
+      throw new Error("provider.tsx should exist for localization");
+    }
+
+    const providerContent = fs.readFileSync(providerPath, "utf8");
+    if (providerContent.includes("useLocalizationStore")) {
+      throw new Error(
+        "provider.tsx should not use useLocalizationStore when localization without Zustand"
+      );
+    }
+    if (!providerContent.includes("useState(")) {
+      throw new Error(
+        "provider.tsx should use useState-based language state when no Zustand"
+      );
+    }
+
+    const storeContent = fs.readFileSync(storePath, "utf8");
+    if (!/export\s*\{\s*\};?/.test(storeContent.trim())) {
+      throw new Error("localization store should be a stub export when no Zustand");
     }
 
     cleanupPath(projectPath);

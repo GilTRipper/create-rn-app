@@ -178,6 +178,8 @@ async function createProjectWithFirebase({
   answers += "no\n";
   // Localization? -> no
   answers += "no\n";
+  // Theme? -> no
+  answers += "no\n";
   // Overwrite? (if exists) -> yes
   answers += "yes\n";
 
@@ -636,6 +638,94 @@ module.exports = function runFirebaseTests() {
     }
 
     // Cleanup
+    cleanupPath(projectPath);
+  });
+
+  // Test: Messaging dependency and notifications preset created when messaging selected
+  test("Check messaging dependency and notifications preset created when messaging selected", async () => {
+    const projectPath = await createProjectWithFirebase({
+      name: "test-firebase-messaging",
+      bundleId: "com.test.firebasemessaging",
+      displayName: "Firebase Messaging",
+      firebaseModules: ["messaging"],
+    });
+
+    const packageJsonPath = path.join(projectPath, "package.json");
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    const deps = packageJson.dependencies || {};
+
+    if (!deps["@react-native-firebase/messaging"]) {
+      throw new Error(
+        "@react-native-firebase/messaging should be added to dependencies when messaging selected"
+      );
+    }
+
+    const notificationsDir = path.join(projectPath, "src/notifications");
+    if (!fs.existsSync(notificationsDir)) {
+      throw new Error("src/notifications directory should be created for messaging");
+    }
+
+    const requiredFiles = [
+      "index.ts",
+      "interface.ts",
+      "service.ts",
+      "hooks/index.ts",
+      "hooks/usePushNotifications.ts",
+      "hooks/useHandlePushNotificationToken.ts",
+    ];
+
+    for (const file of requiredFiles) {
+      const filePath = path.join(notificationsDir, file);
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Required notifications file not found: ${file}`);
+      }
+    }
+
+    // Android: POST_NOTIFICATIONS permission should be enabled in main manifest
+    const androidManifestPath = path.join(
+      projectPath,
+      "android/app/src/main/AndroidManifest.xml"
+    );
+    if (!fs.existsSync(androidManifestPath)) {
+      throw new Error("AndroidManifest.xml not found for main flavor");
+    }
+    const manifestContent = fs.readFileSync(androidManifestPath, "utf8");
+    if (
+      !manifestContent.includes(
+        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
+      )
+    ) {
+      throw new Error(
+        "android.permission.POST_NOTIFICATIONS should be enabled in main AndroidManifest.xml when messaging selected"
+      );
+    }
+
+    // iOS: Info.plist should have UIBackgroundModes remote-notification
+    const infoPlistPath = path.join(
+      projectPath,
+      `ios/${"Firebase Messaging" ? "FirebaseMessaging" : "FirebaseMessaging"}/Info.plist`
+    );
+    // Project name is the CLI name, not displayName
+    const iosDir = path.join(projectPath, "ios");
+    const iosEntries = fs.readdirSync(iosDir);
+    const appDir = iosEntries.find(entry =>
+      fs.statSync(path.join(iosDir, entry)).isDirectory()
+    );
+    const appInfoPlistPath = path.join(iosDir, appDir, "Info.plist");
+
+    if (!fs.existsSync(appInfoPlistPath)) {
+      throw new Error("iOS Info.plist not found");
+    }
+    const infoContent = fs.readFileSync(appInfoPlistPath, "utf8");
+    if (
+      !infoContent.includes("<key>UIBackgroundModes</key>") ||
+      !infoContent.includes("<string>remote-notification</string>")
+    ) {
+      throw new Error(
+        "Info.plist should include UIBackgroundModes with remote-notification when messaging selected"
+      );
+    }
+
     cleanupPath(projectPath);
   });
 };

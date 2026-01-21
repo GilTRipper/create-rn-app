@@ -16,6 +16,7 @@ const runMapsTests = require("./maps.test");
 const runZustandStorageTests = require("./zustand-storage.test");
 const runNavigationAuthTests = require("./navigation-auth.test");
 const runLocalizationTests = require("./localization.test");
+const runThemeTests = require("./theme.test");
 
 // Cleanup before starting
 cleanupAll();
@@ -84,6 +85,9 @@ async function runAllTests() {
 
   log("\n=== Running Localization Tests ===", "info");
   await runLocalizationTests();
+
+  log("\n=== Running Theme Tests ===", "info");
+  await runThemeTests();
 
   // Summary
   const { testsPassed, testsFailed } = getTestStats();

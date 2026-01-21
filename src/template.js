@@ -316,6 +316,30 @@ async function copyThemeTemplate(projectPath) {
   console.log(chalk.green("✅ Copied theme template"));
 }
 
+async function copyNotificationsTemplate(projectPath) {
+  const sourceNotificationsPath = path.join(
+    __dirname,
+    "../template-presets/notifications"
+  );
+
+  if (!(await fs.pathExists(sourceNotificationsPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Notifications template directory not found: ${sourceNotificationsPath}. Skipping notifications template copy.`
+      )
+    );
+    return;
+  }
+
+  const targetNotificationsPath = path.join(projectPath, "src/notifications");
+  await fs.ensureDir(path.dirname(targetNotificationsPath));
+
+  await fs.copy(sourceNotificationsPath, targetNotificationsPath, {
+    overwrite: true,
+  });
+  console.log(chalk.green("✅ Copied notifications template"));
+}
+
 async function configureLocalization(
   projectPath,
   defaultLanguage,
@@ -748,7 +772,7 @@ export {};
 
 async function updateAppTsxForSetup(
   projectPath,
-  { navigationMode, localizationEnabled, themeEnabled }
+  { navigationMode, localizationEnabled, themeEnabled, messagingEnabled }
 ) {
   const appTsxPath = path.join(projectPath, "App.tsx");
 
@@ -761,7 +785,12 @@ async function updateAppTsxForSetup(
     return;
   }
 
-  if (navigationMode === "none" && !localizationEnabled && !themeEnabled) {
+  if (
+    navigationMode === "none" &&
+    !localizationEnabled &&
+    !themeEnabled &&
+    !messagingEnabled
+  ) {
     // Keep template App.tsx as-is
     return;
   }
@@ -789,6 +818,9 @@ async function updateAppTsxForSetup(
   const localizationProviderImport = localizationEnabled
     ? 'import { LocalizationProvider, useLocalization } from "~/lib/localization";\n'
     : "";
+  const notificationsImport = messagingEnabled
+    ? 'import { useHandlePushNotificationToken } from "~/notifications";\n'
+    : "";
 
   if (localizationEnabled && themeEnabled) {
     // Both localization and theme
@@ -796,14 +828,20 @@ async function updateAppTsxForSetup(
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${themeProviderImport}${localizationProviderImport}${navigatorImport}
+${themeProviderImport}${localizationProviderImport}${notificationsImport}${navigatorImport}
 
 const AppContent = () => {
   const { initLocalization } = useLocalization();
+  ${
+    messagingEnabled
+      ? "  const { setNotifications } = useHandlePushNotificationToken();\n"
+      : ""
+  }
 
   useEffect(() => {
     const appBoot = async () => {
       await initLocalization();
+      ${messagingEnabled ? "      await setNotifications();\n" : ""}
       RNBootSplash.hide();
     };
     appBoot();
@@ -832,14 +870,20 @@ export const App = () => (
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${localizationProviderImport}${navigatorImport}
+${localizationProviderImport}${notificationsImport}${navigatorImport}
 
 const AppContent = () => {
   const { initLocalization } = useLocalization();
+  ${
+    messagingEnabled
+      ? "  const { setNotifications } = useHandlePushNotificationToken();\n"
+      : ""
+  }
 
   useEffect(() => {
     const appBoot = async () => {
       await initLocalization();
+      ${messagingEnabled ? "      await setNotifications();\n" : ""}
       RNBootSplash.hide();
     };
     appBoot();
@@ -866,10 +910,16 @@ export const App = () => (
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${themeProviderImport}${navigatorImport}
+${themeProviderImport}${notificationsImport}${navigatorImport}
 
 export const App = () => {
+  ${
+    messagingEnabled
+      ? "  const { setNotifications } = useHandlePushNotificationToken();\n"
+      : ""
+  }
   useEffect(() => {
+    ${messagingEnabled ? "    setNotifications();\n" : ""}
     RNBootSplash.hide();
   }, []);
 
@@ -891,10 +941,16 @@ ${contentJsx}
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${navigatorImport}
+${notificationsImport}${navigatorImport}
 
 export const App = () => {
+  ${
+    messagingEnabled
+      ? "  const { setNotifications } = useHandlePushNotificationToken();\n"
+      : ""
+  }
   useEffect(() => {
+    ${messagingEnabled ? "    setNotifications();\n" : ""}
     RNBootSplash.hide();
   }, []);
 
@@ -975,6 +1031,65 @@ async function ensureGoogleServicesPlugin(projectPath) {
         match => `${match}apply plugin: 'com.google.gms.google-services'\n`
       );
       await fs.writeFile(appBuildGradle, content, "utf8");
+    }
+  }
+}
+
+async function enableAndroidPostNotificationsPermission(projectPath) {
+  const srcDir = path.join(projectPath, "android/app/src");
+  if (!(await fs.pathExists(srcDir))) return;
+
+  const entries = await fs.readdir(srcDir);
+  for (const entry of entries) {
+    const manifestPath = path.join(srcDir, entry, "AndroidManifest.xml");
+    if (!(await fs.pathExists(manifestPath))) continue;
+
+    let content = await fs.readFile(manifestPath, "utf8");
+    if (content.includes('android.permission.POST_NOTIFICATIONS')) {
+      // Uncomment if commented
+      content = content.replace(
+        /<!--\s*<uses-permission android:name="android\.permission\.POST_NOTIFICATIONS"\s*\/>\s*-->/g,
+        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />'
+      );
+      await fs.writeFile(manifestPath, content, "utf8");
+    }
+  }
+}
+
+async function enableIosRemoteNotificationsBackgroundMode(projectPath) {
+  const iosDir = path.join(projectPath, "ios");
+  if (!(await fs.pathExists(iosDir))) return;
+
+  const entries = await fs.readdir(iosDir);
+  for (const entry of entries) {
+    const candidateDir = path.join(iosDir, entry);
+    const stat = await fs.stat(candidateDir).catch(() => null);
+    if (!stat || !stat.isDirectory()) continue;
+
+    // Update main Info.plist + any env-specific Info.*.plist if present
+    const files = await fs.readdir(candidateDir).catch(() => []);
+    for (const file of files) {
+      if (!/^Info(\..+)?\.plist$/.test(file)) continue;
+      const plistPath = path.join(candidateDir, file);
+      let content = await fs.readFile(plistPath, "utf8");
+
+      if (content.includes("<key>UIBackgroundModes</key>")) {
+        // Ensure remote-notification present
+        if (!content.includes("<string>remote-notification</string>")) {
+          content = content.replace(
+            /<key>UIBackgroundModes<\/key>\s*<array>/,
+            `<key>UIBackgroundModes</key>\n\t<array>\n\t\t<string>remote-notification</string>`
+          );
+        }
+      } else {
+        // Add UIBackgroundModes before closing </dict>
+        content = content.replace(
+          /<\/dict>\s*<\/plist>/,
+          `\t<key>UIBackgroundModes</key>\n\t<array>\n\t\t<string>remote-notification</string>\n\t</array>\n</dict>\n</plist>`
+        );
+      }
+
+      await fs.writeFile(plistPath, content, "utf8");
     }
   }
 }
@@ -5807,6 +5922,10 @@ async function createApp(config) {
   const templatePath = path.join(__dirname, "../template");
   const firebaseEnabled = firebase?.enabled || false;
   const firebaseModules = firebase?.modules || [];
+  const messagingEnabled =
+    firebaseEnabled && Array.isArray(firebaseModules)
+      ? firebaseModules.includes("messaging")
+      : false;
   const firebaseFilesByEnv = getGoogleFilesByEnv(firebase?.googleFiles);
   const mapsEnabled = maps?.enabled || false;
   const mapsProvider = maps?.provider || null;
@@ -6567,6 +6686,13 @@ async function createApp(config) {
       }
     }
 
+    // Push notifications (Firebase Messaging) setup
+    if (messagingEnabled) {
+      await copyNotificationsTemplate(projectPath);
+      await enableAndroidPostNotificationsPermission(projectPath);
+      await enableIosRemoteNotificationsBackgroundMode(projectPath);
+    }
+
     // Create Zustand storage setup if selected OR if required by enabled features
     // (auth store requires zustandStorage; localization/theme can work without it using simple context)
     const needsZustandStorage =
@@ -6685,6 +6811,7 @@ export const zustandStorage: StateStorage = {
       navigationMode,
       localizationEnabled,
       themeEnabled,
+      messagingEnabled,
     });
 
     // Add GoogleServices folder/file to Xcode project (after all targets are created)
