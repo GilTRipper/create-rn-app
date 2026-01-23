@@ -10,10 +10,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Theme support (optional)**: Added theme preset (`src/lib/theme`) with mock light/dark themes and `ThemeProvider` integration into `App.tsx`.
 - **Theme setup prompt**: Added an interactive prompt to enable theme support during project creation (pattern matches localization setup).
+- **Push Notifications (Firebase Messaging)**: Added push notifications support with `src/notifications` module including `useHandlePushNotificationToken` hook and `PushNotificationService`.
+- **Mapbox support**: Added Mapbox (`@rnmapbox/maps`) as an alternative to `react-native-maps` in maps setup prompt.
+  - New maps selection: Choose between `react-native-maps`, `Mapbox`, or `Cancel`
+  - Mapbox access token prompt: Option to provide token during setup or configure later
+  - Automatic Mapbox configuration:
+    - Adds `@rnmapbox/maps` dependency to `package.json`
+    - Configures iOS Podfile with `$RNMapboxMaps` pre_install/post_install hooks
+    - Adds Mapbox Maven repository to Android `build.gradle`
+    - Sets up `Mapbox.setAccessToken()` in `App.tsx`
+  - Creates `src/map/` with `MapView` component template for chosen provider (Mapbox or react-native-maps)
 
 ### Changed
 - **Zustand storage prompt flow**: If user enables **theme** and/or **localization** without enabling Zustand storage, the CLI now prompts again to enable Zustand storage.
 - **No-store fallback**: If the user still declines Zustand storage, **theme** and **localization** are generated to work **without any store** (state is kept via `useState` inside their existing providers; no persistence).
+- **Maps templates**: When maps are selected, a `src/map/` directory is now created with a `MapView` component template (either Mapbox or react-native-maps based on selection).
 
 ## [1.1.3] - 2025-12-16
 

@@ -772,7 +772,7 @@ export {};
 
 async function updateAppTsxForSetup(
   projectPath,
-  { navigationMode, localizationEnabled, themeEnabled, messagingEnabled }
+  { navigationMode, localizationEnabled, themeEnabled, messagingEnabled, mapboxToken }
 ) {
   const appTsxPath = path.join(projectPath, "App.tsx");
 
@@ -822,13 +822,22 @@ async function updateAppTsxForSetup(
     ? 'import { useHandlePushNotificationToken } from "~/notifications";\n'
     : "";
 
+  const mapboxImport = mapboxToken !== undefined
+    ? `import Mapbox from "@rnmapbox/maps";\n`
+    : "";
+  const mapboxInit = mapboxToken !== undefined
+    ? mapboxToken
+      ? `Mapbox.setAccessToken("${mapboxToken}");\n\n`
+      : `Mapbox.setAccessToken("<MAPBOX_ACCESS_TOKEN>");\n\n`
+    : "";
+
   if (localizationEnabled && themeEnabled) {
     // Both localization and theme
-    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+    const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${themeProviderImport}${localizationProviderImport}${notificationsImport}${navigatorImport}
+${mapboxInit}${themeProviderImport}${localizationProviderImport}${notificationsImport}${navigatorImport}
 
 const AppContent = () => {
   const { initLocalization } = useLocalization();
@@ -866,11 +875,11 @@ export const App = () => (
 
   if (localizationEnabled) {
     // Only localization
-    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+    const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${localizationProviderImport}${notificationsImport}${navigatorImport}
+${mapboxInit}${localizationProviderImport}${notificationsImport}${navigatorImport}
 
 const AppContent = () => {
   const { initLocalization } = useLocalization();
@@ -906,11 +915,11 @@ export const App = () => (
 
   if (themeEnabled) {
     // Only theme
-    const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+    const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${themeProviderImport}${notificationsImport}${navigatorImport}
+${mapboxInit}${themeProviderImport}${notificationsImport}${navigatorImport}
 
 export const App = () => {
   ${
@@ -937,11 +946,11 @@ ${contentJsx}
   }
 
   // No localization or theme: just hide splash on mount
-  const appTsxContent = `import { NavigationContainer } from "@react-navigation/native";
+  const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
 import { useEffect } from "react";
 import { View } from "react-native";
 import RNBootSplash from "react-native-bootsplash";
-${notificationsImport}${navigatorImport}
+${mapboxInit}${notificationsImport}${navigatorImport}
 
 export const App = () => {
   ${
@@ -1223,6 +1232,7 @@ async function removeMapsDependencies(projectPath) {
   if (packageData.dependencies) {
     delete packageData.dependencies["react-native-maps"];
     delete packageData.dependencies["react-native-maps-directions"];
+    delete packageData.dependencies["@rnmapbox/maps"];
   }
 
   await fs.writeFile(
@@ -1230,6 +1240,230 @@ async function removeMapsDependencies(projectPath) {
     JSON.stringify(packageData, null, 2) + "\n",
     "utf8"
   );
+}
+
+async function addMapboxDependencies(projectPath) {
+  const packageJsonPath = path.join(projectPath, "package.json");
+  if (!(await fs.pathExists(packageJsonPath))) return;
+
+  const content = await fs.readFile(packageJsonPath, "utf8");
+  const packageData = JSON.parse(content);
+
+  packageData.dependencies = packageData.dependencies || {};
+  packageData.dependencies["@rnmapbox/maps"] = "^10.2.10";
+
+  await fs.writeFile(
+    packageJsonPath,
+    JSON.stringify(packageData, null, 2) + "\n",
+    "utf8"
+  );
+}
+
+async function copyMapboxTemplate(projectPath) {
+  const sourceMapboxPath = path.join(
+    __dirname,
+    "../template-presets/map-mapbox"
+  );
+
+  if (!(await fs.pathExists(sourceMapboxPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  Mapbox template directory not found: ${sourceMapboxPath}. Skipping mapbox template copy.`
+      )
+    );
+    return;
+  }
+
+  const targetMapPath = path.join(projectPath, "src/map");
+  await fs.ensureDir(path.dirname(targetMapPath));
+
+  await fs.copy(sourceMapboxPath, targetMapPath, {
+    overwrite: true,
+  });
+  console.log(chalk.green("✅ Copied Mapbox map template"));
+}
+
+async function copyReactNativeMapsTemplate(projectPath) {
+  const sourceRnMapsPath = path.join(
+    __dirname,
+    "../template-presets/map-rn"
+  );
+
+  if (!(await fs.pathExists(sourceRnMapsPath))) {
+    console.log(
+      chalk.yellow(
+        `⚠️  react-native-maps template directory not found: ${sourceRnMapsPath}. Skipping template copy.`
+      )
+    );
+    return;
+  }
+
+  const targetMapPath = path.join(projectPath, "src/map");
+  await fs.ensureDir(path.dirname(targetMapPath));
+
+  await fs.copy(sourceRnMapsPath, targetMapPath, {
+    overwrite: true,
+  });
+  console.log(chalk.green("✅ Copied react-native-maps template"));
+}
+
+async function updatePodfileForMapbox(projectPath) {
+  const podfilePath = path.join(projectPath, "ios/Podfile");
+  if (!(await fs.pathExists(podfilePath))) return;
+
+  let content = await fs.readFile(podfilePath, "utf8");
+
+  // Check if Mapbox hooks are already added
+  if (content.includes("$RNMapboxMaps")) {
+    return; // Already configured
+  }
+
+  // Add Mapbox require_relative at the top (after node_require function)
+  if (!content.includes("require_relative '../node_modules/@rnmapbox/maps/scripts/autolinking'")) {
+    // Add after node_require function or after other require_relative
+    if (content.includes("node_require('react-native-permissions/scripts/setup.rb')")) {
+      content = content.replace(
+        /(node_require\('react-native-permissions\/scripts\/setup\.rb'\)\s*\n)/,
+        `$1require_relative '../node_modules/@rnmapbox/maps/scripts/autolinking'\n`
+      );
+    } else if (content.includes("require_relative")) {
+      content = content.replace(
+        /(require_relative[^\n]+\n)/,
+        `$1require_relative '../node_modules/@rnmapbox/maps/scripts/autolinking'\n`
+      );
+    } else {
+      // Add after platform declaration
+      content = content.replace(
+        /(platform\s+:ios[^\n]+\n)/,
+        `$1require_relative '../node_modules/@rnmapbox/maps/scripts/autolinking'\n`
+      );
+    }
+  }
+
+  // Add Mapbox pre_install hook
+  if (content.includes("pre_install do |installer|")) {
+    // Add to existing pre_install
+    if (!content.includes("$RNMapboxMaps.pre_install")) {
+      content = content.replace(
+        /(pre_install do \|installer\|\s*\n)/,
+        `$1    $RNMapboxMaps.pre_install(installer)\n`
+      );
+    }
+  } else {
+    // Add new pre_install block before post_install
+    // Find the target block end before post_install
+    content = content.replace(
+      /(\s*end\s*\n\s*post_install\s+do)/,
+      `\n  pre_install do |installer|\n    $RNMapboxMaps.pre_install(installer)\n  end$1`
+    );
+  }
+
+  // Add Mapbox post_install hook
+  if (content.includes("post_install do |installer|")) {
+    // Add to existing post_install, right after the opening
+    if (!content.includes("$RNMapboxMaps.post_install")) {
+      content = content.replace(
+        /(post_install do \|installer\|\s*\n)/,
+        `$1    $RNMapboxMaps.post_install(installer)\n\n`
+      );
+    }
+  }
+
+  await fs.writeFile(podfilePath, content, "utf8");
+}
+
+async function updateAndroidBuildGradleForMapbox(projectPath) {
+  const buildGradlePath = path.join(projectPath, "android/build.gradle");
+  if (!(await fs.pathExists(buildGradlePath))) return;
+
+  let content = await fs.readFile(buildGradlePath, "utf8");
+
+  // Check if Mapbox repository is already added
+  if (content.includes("api.mapbox.com/downloads/v2/releases/maven")) {
+    return; // Already configured
+  }
+
+  // Add Mapbox Maven repository in allprojects.repositories
+  if (content.includes("allprojects {")) {
+    if (content.includes("repositories {")) {
+      // Add Mapbox repository after mavenCentral()
+      content = content.replace(
+        /(repositories\s*\{[^}]*mavenCentral\(\)\s*\n)/,
+        `$1            maven {\n                url 'https://api.mapbox.com/downloads/v2/releases/maven'\n            }\n`
+      );
+    }
+  }
+
+  await fs.writeFile(buildGradlePath, content, "utf8");
+}
+
+async function updateAppTsxForMapbox(projectPath, mapboxToken) {
+  const appTsxPath = path.join(projectPath, "App.tsx");
+  if (!(await fs.pathExists(appTsxPath))) return;
+
+  let content = await fs.readFile(appTsxPath, "utf8");
+
+  // Check if Mapbox is already imported
+  if (content.includes("@rnmapbox/maps")) {
+    // Update token if provided
+    if (mapboxToken) {
+      content = content.replace(
+        /Mapbox\.setAccessToken\([^)]+\)/,
+        `Mapbox.setAccessToken("${mapboxToken}")`
+      );
+    } else if (!content.includes("Mapbox.setAccessToken")) {
+      // Add placeholder if not exists
+      const importMatch = content.match(/import\s+Mapbox\s+from\s+["']@rnmapbox\/maps["']/);
+      if (importMatch) {
+        // Find where to add initialization - before App component or at top level
+        if (content.includes("export const App")) {
+          content = content.replace(
+            /(import\s+Mapbox\s+from\s+["']@rnmapbox\/maps["']\s*\n)/,
+            `$1\nMapbox.setAccessToken("<MAPBOX_ACCESS_TOKEN>");\n`
+          );
+        }
+      }
+    }
+  } else {
+    // Add Mapbox import and initialization
+    const importLine = 'import Mapbox from "@rnmapbox/maps";\n';
+    const initLine = mapboxToken
+      ? `Mapbox.setAccessToken("${mapboxToken}");\n`
+      : `Mapbox.setAccessToken("<MAPBOX_ACCESS_TOKEN>");\n`;
+
+    // Add import after React imports or at the top
+    if (content.includes('import React')) {
+      content = content.replace(
+        /(import\s+React[^\n]*\n)/,
+        `$1${importLine}`
+      );
+    } else if (content.includes('import ')) {
+      // Add after last import
+      content = content.replace(
+        /(import\s+[^\n]+\n)/,
+        `$1${importLine}`
+      );
+    } else {
+      // Add at the top
+      content = `${importLine}${content}`;
+    }
+
+    // Add initialization before App component or at top level
+    if (content.includes("export const App")) {
+      content = content.replace(
+        /(import\s+Mapbox\s+from\s+["']@rnmapbox\/maps["']\s*\n)/,
+        `$1${initLine}`
+      );
+    } else {
+      // Add at top level after imports
+      content = content.replace(
+        /(import\s+Mapbox\s+from\s+["']@rnmapbox\/maps["']\s*\n)/,
+        `$1${initLine}`
+      );
+    }
+  }
+
+  await fs.writeFile(appTsxPath, content, "utf8");
 }
 
 async function updatePodfileForMaps(projectPath, enableGoogleMaps) {
@@ -5930,7 +6164,9 @@ async function createApp(config) {
   const mapsEnabled = maps?.enabled || false;
   const mapsProvider = maps?.provider || null;
   const googleMapsApiKey = maps?.googleMapsApiKey || null;
+  const mapboxToken = maps?.mapboxToken || null;
   const enableGoogleMaps = mapsProvider === "google-maps";
+  const enableMapbox = mapsProvider === "mapbox";
   const localizationEnabled = localization?.enabled || false;
   const themeEnabled = theme || false;
   const localizationDefaultLanguage = localization?.defaultLanguage || "ru";
@@ -6812,6 +7048,7 @@ export const zustandStorage: StateStorage = {
       localizationEnabled,
       themeEnabled,
       messagingEnabled,
+      mapboxToken: enableMapbox ? mapboxToken : undefined,
     });
 
     // Add GoogleServices folder/file to Xcode project (after all targets are created)
@@ -6828,13 +7065,27 @@ export const zustandStorage: StateStorage = {
 
     // Maps setup
     if (!mapsEnabled) {
-      // Remove react-native-maps dependencies if maps are not enabled
+      // Remove all maps dependencies if maps are not enabled
       await removeMapsDependencies(projectPath);
       // Also remove Google Maps code if maps are not enabled
       await updatePodfileForMaps(projectPath, false);
       await updateAppDelegateForMaps(projectPath, projectName, false, null);
       await updateAndroidManifestForMaps(projectPath, false, null);
+    } else if (enableMapbox) {
+      // Mapbox setup - remove react-native-maps dependencies first
+      await removeMapsDependencies(projectPath);
+      await updatePodfileForMaps(projectPath, false);
+      await updateAppDelegateForMaps(projectPath, projectName, false, null);
+      await updateAndroidManifestForMaps(projectPath, false, null);
+      // Add Mapbox
+      await addMapboxDependencies(projectPath);
+      await copyMapboxTemplate(projectPath);
+      await updatePodfileForMapbox(projectPath);
+      await updateAndroidBuildGradleForMapbox(projectPath);
+      // Mapbox token setup is handled in updateAppTsxForSetup
     } else {
+      // react-native-maps setup
+      await copyReactNativeMapsTemplate(projectPath);
       // Update Podfile for Google Maps (only affects iOS)
       await updatePodfileForMaps(projectPath, enableGoogleMaps);
       // Update AppDelegate for Google Maps (only affects iOS)

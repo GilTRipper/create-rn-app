@@ -10,7 +10,12 @@
     "android:build": "cd android && ./gradlew clean && ./gradlew app:assembleRelease",
     "icons": "node scripts/generate-icons.js",
     "module": "node scripts/create-module.js",
-    "codegen": "orval"
+    "codegen": "orval",
+    "clean:metro": "rm -rf $TMPDIR/react-* $TMPDIR/metro-* $TMPDIR/haste-* 2>/dev/null || true && echo '✅ Metro cache cleared'",
+    "clean:ios": "cd ios && rm -rf Pods Podfile.lock build && rm -rf ~/Library/Developer/Xcode/DerivedData/* 2>/dev/null || true && echo '✅ iOS cache cleared'",
+    "clean:android": "cd android && rm -rf .gradle build app/build && echo '✅ Android cache cleared'",
+    "clean:all": "pnpm run clean:metro && pnpm run clean:ios && pnpm run clean:android && rm -rf node_modules && echo '✅ All caches cleared. Next steps: pnpm install && cd ios && pod install'",
+    "clean:rebuild": "./clean-rebuild.sh"
   },
   "dependencies": {
     "@d11/react-native-fast-image": "^8.12.0",

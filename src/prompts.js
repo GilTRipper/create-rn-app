@@ -371,6 +371,7 @@ async function getPrompts(projectNameArg, options) {
     enabled: false,
     provider: null,
     googleMapsApiKey: null,
+    mapboxToken: null,
   };
 
   if (!options.yes) {
@@ -381,6 +382,7 @@ async function getPrompts(projectNameArg, options) {
         message: "Will you be using maps?",
         choices: [
           { name: "react-native-maps", value: "react-native-maps" },
+          { name: "Mapbox", value: "mapbox" },
           { name: "Cancel", value: "__CANCEL__" },
         ],
         default: "__CANCEL__",
@@ -418,6 +420,24 @@ async function getPrompts(projectNameArg, options) {
         if (googleMapsApiKey && googleMapsApiKey.trim().length > 0) {
           mapsConfig.googleMapsApiKey = googleMapsApiKey.trim();
         }
+      }
+    } else if (mapsSelection === "mapbox") {
+      mapsConfig.enabled = true;
+      mapsConfig.provider = "mapbox";
+
+      // Ask for Mapbox access token
+      const { mapboxToken } = await inquirer.prompt([
+        {
+          type: "input",
+          name: "mapboxToken",
+          message:
+            "Enter your Mapbox access token (or press Enter to skip and configure later):",
+          default: "",
+        },
+      ]);
+
+      if (mapboxToken && mapboxToken.trim().length > 0) {
+        mapsConfig.mapboxToken = mapboxToken.trim();
       }
     }
   }

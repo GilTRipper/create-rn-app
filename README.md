@@ -131,8 +131,11 @@ The tool will automatically:
 After Firebase setup, you'll be prompted to configure maps:
 
 1. **Will you be using maps?** - Choose from:
-   - `react-native-maps` - Install react-native-maps library
+   - `react-native-maps` - Install react-native-maps library (Google Maps / Apple Maps)
+   - `Mapbox` - Install @rnmapbox/maps library
    - `Cancel` - Skip maps setup
+
+#### react-native-maps
 
 2. **If you selected react-native-maps**, you'll be asked:
    - **Do you want to configure Google Maps?** - Choose whether to enable Google Maps support
@@ -142,24 +145,45 @@ After Firebase setup, you'll be prompted to configure maps:
 
 The tool will automatically:
 - **When maps are not selected:**
-  - Remove `react-native-maps` and `react-native-maps-directions` from `package.json`
+  - Remove `react-native-maps`, `react-native-maps-directions`, and `@rnmapbox/maps` from `package.json`
   - Remove Google Maps code from `ios/Podfile`
   - Remove Google Maps imports and initialization from `ios/{projectName}/AppDelegate.swift`
   - Comment out Google Maps API key in `android/app/src/main/AndroidManifest.xml`
 
 - **When react-native-maps is selected but Google Maps is disabled:**
   - Keep `react-native-maps` in `package.json`
+  - Create `src/map/` with `MapView` component template
   - Remove Google Maps pod from `ios/Podfile` (uses Apple Maps on iOS)
   - Remove Google Maps code from `AppDelegate.swift`
   - Comment out Google Maps API key in `AndroidManifest.xml`
 
 - **When Google Maps is enabled:**
+  - Create `src/map/` with `MapView` component template (using `PROVIDER_GOOGLE`)
   - Add Google Maps pod to `ios/Podfile`
   - Add Google Maps import and initialization to `AppDelegate.swift`
   - If API key is provided: Replace placeholders with your API key in both iOS and Android
   - If API key is skipped: Leave placeholder `<GOOGLE_MAPS_API_KEY>` in `AppDelegate.swift` and comment out `AndroidManifest.xml` entry
 
 **Note:** On Android, Google Maps is required for react-native-maps. If you skip the API key, you'll need to configure it later in `android/local.properties` and uncomment the entry in `AndroidManifest.xml`.
+
+#### Mapbox
+
+2. **If you selected Mapbox**, you'll be prompted:
+   - **Enter your Mapbox access token** - Provide your token or press Enter to skip and configure later
+
+The tool will automatically:
+- Add `@rnmapbox/maps` to `package.json`
+- Create `src/map/` with Mapbox `MapView` component template
+- Configure iOS:
+  - Add `require_relative` for Mapbox autolinking to `Podfile`
+  - Add `$RNMapboxMaps.pre_install` and `$RNMapboxMaps.post_install` hooks
+- Configure Android:
+  - Add Mapbox Maven repository to `android/build.gradle`
+- Update `App.tsx`:
+  - Add `import Mapbox from "@rnmapbox/maps"`
+  - Add `Mapbox.setAccessToken("<your-token>")` (or placeholder if skipped)
+
+**Note:** You can get a Mapbox access token from [Mapbox Account](https://account.mapbox.com/access-tokens/).
 
 **Note:** If you skip maps during project creation, you can always add them later manually or re-run the generator.
 
@@ -386,7 +410,7 @@ The generated project includes a production-ready React Native app with:
 - 🌍 Localization setup (optional: i18next + react-i18next + i18next-icu + react-native-localize)
 - 📦 Zustand for state management, TanStack Query for server state
 - 🔥 Firebase (optional: Analytics, Messaging, Remote Config)
-- 🗺️ Maps integration (optional: react-native-maps with optional Google Maps support)
+- 🗺️ Maps integration (optional: react-native-maps with Google Maps or Mapbox)
 - 🎨 Modern UI components (Bottom Sheet, Toast, Blur View, etc.)
 - 📱 Native features (Push Notifications, Geolocation, Permissions, etc.)
 - 🛠️ TypeScript, ESLint, Prettier, and development tools
