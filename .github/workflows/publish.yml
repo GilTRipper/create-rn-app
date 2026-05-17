@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Publish Packages
 
 on:
   release:
@@ -11,9 +11,19 @@ on:
       tag:
         description: "Tag to publish (e.g., v1.0.2)"
         required: true
+      publish_target:
+        description: "Where to publish"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - npm
+          - github
 
 jobs:
-  publish:
+  publish_npm:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_target == 'both' || inputs.publish_target == 'npm' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,3 +65,48 @@ jobs:
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish_github_packages:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_target == 'both' || inputs.publish_target == 'github' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref || inputs.tag }}
+
+      - name: Setup Node.js for GitHub Packages
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@giltripper"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify package.json version matches tag
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG_VERSION="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            TAG_VERSION=${GITHUB_REF#refs/tags/}
+          else
+            TAG_VERSION="${{ inputs.tag }}"
+          fi
+          EXPECTED_VERSION=${TAG_VERSION#v}
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$EXPECTED_VERSION" != "$PACKAGE_VERSION" ]; then
+            echo "❌ Version mismatch: tag is $EXPECTED_VERSION but package.json is $PACKAGE_VERSION"
+            exit 1
+          fi
+          echo "✅ Version matches: $PACKAGE_VERSION"
+
+      - name: Publish to GitHub Packages
+        run: npm publish --registry https://npm.pkg.github.com
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
