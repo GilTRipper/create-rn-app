@@ -22,7 +22,7 @@ A professional React Native sample project demonstrating modern mobile developme
 ## 🎯 Overview
 
 This is a sample React Native project showcasing:
-- Modern React Native architecture (0.82.1 with React 19.1.1)
+- Modern React Native architecture (0.83.2 with React 19.2.0)
 - Firebase integration (Analytics, Messaging, Remote Config)
 - Google Maps with directions
 - Custom splash screen and icons
@@ -445,8 +445,8 @@ src/
 ## 🔑 Key Dependencies
 
 ### Core
-- **React**: 19.1.1
-- **React Native**: 0.82.1
+- **React**: 19.2.0
+- **React Native**: 0.83.2
 - **TypeScript**: 5.8.3
 
 ### Navigation
