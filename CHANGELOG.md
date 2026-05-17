@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-05-18
+
 ### Added
 - **Theme support (optional)**: Added theme preset (`src/lib/theme`) with mock light/dark themes and `ThemeProvider` integration into `App.tsx`.
 - **Theme setup prompt**: Added an interactive prompt to enable theme support during project creation (pattern matches localization setup).
