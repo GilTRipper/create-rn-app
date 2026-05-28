@@ -11,3 +11,5 @@ dist/
 
 # Keep template
 !template/
+
+.pnpm-store/

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.5] - 2026-05-28
+
+### Fixed
+- **iOS build: NitroDeviceInfo / NitroModules**: Fixed 21 Xcode build errors (`NitroModules cannot be found`, `Use of undeclared identifier 'PropNameIDCache'`, `Could not build Objective-C module 'NitroDeviceInfo'`). Root cause was a version mismatch — `react-native-nitro-device-info` resolved to a version requiring `react-native-nitro-modules@0.33+`, while the template pinned `^0.31.4` (installed as 0.31.10).
+
+### Changed
+- **Nitro stack** (aligned peer dependencies):
+  - `react-native-nitro-modules`: `^0.31.4` → `^0.35.9`
+  - `react-native-nitro-device-info`: `^1.4.2` → `^1.7.0`
+  - `react-native-mmkv`: `^4.0.0` → `^4.3.1` (also updates native `MMKVCore` pod)
+- **Animation & gestures** (Reanimated 4.4 requires Worklets 0.9.x on RN 0.83):
+  - `react-native-reanimated`: `^4.1.3` → `^4.4.0`
+  - `react-native-worklets`: `^0.7.1` → `^0.9.1`
+  - `react-native-gesture-handler`: `^2.29.1` → `^2.31.2` (latest 2.x; **not** 3.0 — major breaking changes)
+
+### Notes
+- After upgrading an existing project: run `pnpm install`, then `cd ios && pod update MMKVCore NitroModules NitroDeviceInfo NitroMmkv RNReanimated RNWorklets RNGestureHandler` (or `pnpm run clean:ios` + fresh `pod install`).
+- Verified: iOS simulator build succeeds with NitroModules 0.35.9 and NitroDeviceInfo 1.7.0.
+
 ## [1.1.4] - 2026-05-18
 
 ### Added
