@@ -323,7 +323,8 @@ testapp/
 ├── patches/                # pnpm patches for dependencies
 ├── scripts/                # Utility scripts
 │   ├── create-module.js    # Module generator
-│   └── generate-icons.js   # Icon generator
+│   ├── generate-icons.js   # Icon generator
+│   └── setup-xcode-env.js  # Node path for Xcode (ios/.xcode.env.local)
 ├── App.tsx                 # Root component
 ├── index.js               # App entry point
 └── package.json           # Dependencies and scripts

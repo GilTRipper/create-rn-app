@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.6] - 2026-05-28
+
 ### Added
 - **`scripts/setup-xcode-env.js`**: Writes `ios/.xcode.env.local` with the local `NODE_BINARY` path (nvm, fnm, Homebrew).
 - **Template `postinstall` / `setup:ios-env`**: Runs the script after `pnpm install` and on project creation via the CLI.
 
 ### Fixed
 - **iOS: `PhaseScriptExecution failed` / `Bundle React Native code and images`**: Xcode often runs build scripts with a minimal `PATH` and cannot find `node` when it is installed via nvm/fnm. React Native reads `ios/.xcode.env` and `ios/.xcode.env.local`; without the local file, the bundle phase fails on some machines while working on the author's laptop.
+
+### Changed
+- **Template README**: Added troubleshooting steps for the Xcode Node path issue; replaced project-specific names with generic `testapp` examples.
+
+### Notes
+- **Existing projects**: copy `scripts/setup-xcode-env.js`, add `postinstall` / `setup:ios-env` to `package.json`, keep `ios/.xcode.env.local` in `.gitignore`, then run `pnpm install` on each machine.
 
 ## [1.1.5] - 2026-05-28
 
