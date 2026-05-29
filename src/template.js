@@ -6130,6 +6130,33 @@ async function addScriptsToPackageJson(
   );
 }
 
+async function setupXcodeEnvLocal(projectPath) {
+  const scriptPath = path.join(projectPath, "scripts", "setup-xcode-env.js");
+
+  if (!(await fs.pathExists(scriptPath))) {
+    return;
+  }
+
+  try {
+    await execa("node", [scriptPath], {
+      cwd: projectPath,
+      stdio: "pipe",
+    });
+  } catch (error) {
+    console.log(
+      chalk.yellow(
+        "⚠️  Could not auto-configure ios/.xcode.env.local for Xcode builds"
+      )
+    );
+    if (error.stderr) {
+      console.log(chalk.dim(String(error.stderr)));
+    }
+    console.log(
+      chalk.gray("Run manually after install: pnpm setup:ios-env\n")
+    );
+  }
+}
+
 async function createApp(config) {
   const {
     projectName,
@@ -7115,6 +7142,8 @@ export const zustandStorage: StateStorage = {
     replaceSpinner.fail("Failed to replace placeholders");
     throw error;
   }
+
+  await setupXcodeEnvLocal(projectPath);
 
   // Step 2.4: Copy splash screen images if provided
   await copySplashScreenImages(splashScreenDir, projectPath, projectName);

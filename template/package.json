@@ -15,7 +15,9 @@
     "clean:ios": "cd ios && rm -rf Pods Podfile.lock build && rm -rf ~/Library/Developer/Xcode/DerivedData/* 2>/dev/null || true && echo '✅ iOS cache cleared'",
     "clean:android": "cd android && rm -rf .gradle build app/build && echo '✅ Android cache cleared'",
     "clean:all": "pnpm run clean:metro && pnpm run clean:ios && pnpm run clean:android && rm -rf node_modules && echo '✅ All caches cleared. Next steps: pnpm install && cd ios && pod install'",
-    "clean:rebuild": "./clean-rebuild.sh"
+    "clean:rebuild": "./clean-rebuild.sh",
+    "setup:ios-env": "node scripts/setup-xcode-env.js",
+    "postinstall": "node scripts/setup-xcode-env.js"
   },
   "dependencies": {
     "@d11/react-native-fast-image": "^8.12.0",

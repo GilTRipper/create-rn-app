@@ -57,7 +57,7 @@ Before you begin, ensure you have the following installed:
 1. **Clone the repository**
    ```bash
    git clone <your-repo-url>
-   cd trofimobile
+   cd testapp
    ```
 
 2. **Install dependencies**
@@ -207,7 +207,7 @@ This project includes a script to generate icons for both platforms:
    ```
 
 3. **Manual generation (if needed)**
-   - For iOS: Replace icons in `ios/trofimobile/Images.xcassets/AppIcon.appiconset/`
+   - For iOS: Replace icons in `ios/testapp/Images.xcassets/AppIcon.appiconset/`
    - For Android: Replace icons in `android/app/src/main/res/mipmap-*/`
    - Use tools like [makeappicon.com](https://makeappicon.com) or [appicon.co](https://appicon.co)
 
@@ -306,12 +306,13 @@ pnpm android:build      # Build Android release APK
 pnpm icons              # Generate app icons
 pnpm module             # Create a new module (custom script)
 pnpm codegen            # Generate API client with Orval
+pnpm setup:ios-env      # Regenerate ios/.xcode.env.local (Node path for Xcode)
 ```
 
 ## 📁 Project Structure
 
 ```
-trofimobile/
+testapp/
 ├── android/                 # Android native code
 ├── ios/                     # iOS native code
 ├── src/                     # Source code (organize your code here)
@@ -512,8 +513,41 @@ src/
    ```
 
 5. **iOS signing issues**
-   - Open `ios/trofimobile.xcworkspace` in Xcode
+   - Open `ios/testapp.xcworkspace` in Xcode
    - Select your development team in Signing & Capabilities
+
+6. **iOS: `Command PhaseScriptExecution failed` / `Bundle React Native code and images`**
+
+   Xcode build scripts often cannot find `node` when it is installed via **nvm**, **fnm**, or a custom PATH. The failing phase is usually **Bundle React Native code and images**, not CocoaPods or env files.
+
+   **Projects from a recent template / CLI** — path is set automatically on install:
+
+   ```bash
+   pnpm install
+   ```
+
+   Or regenerate only the Node config:
+
+   ```bash
+   pnpm setup:ios-env
+   ```
+
+   This creates `ios/.xcode.env.local` (gitignored) with your machine's `NODE_BINARY`. Rebuild in Xcode after that.
+
+   **One-off fix without the script:**
+
+   ```bash
+   echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
+   ```
+
+   **Older projects** (created before this fix): add `scripts/setup-xcode-env.js` from the template, then in `package.json`:
+
+   ```json
+   "setup:ios-env": "node scripts/setup-xcode-env.js",
+   "postinstall": "node scripts/setup-xcode-env.js"
+   ```
+
+   Ensure `.gitignore` includes `ios/.xcode.env.local`, commit the script + scripts block, and run `pnpm install` on each machine.
 
 ### Additional Resources
 
