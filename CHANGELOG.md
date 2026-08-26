@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Optional **UI kit** from `ui-templates/`. Interactive prompt copies `All` or selected components into `src/ui/components/` and injects only their npm dependencies. Current components: **TurboImage** (`react-native-turbo-image`) and **LiquidGlassView** / **AnimatedLiquidGlassView** (`@callstack/liquid-glass`, Xcode 26+ for the iOS glass effect).
+- E2E coverage for Node `>= 22.11.0`, RN 0.86 tooling pins, environments without Firebase (no SPM opt-out / Firebase pods), and environments with Firebase (DisableSPM, Remote Config pods, per-env Google files). Firebase + skipped Maps keeps `FirebaseApp.configure()` in AppDelegate.
+- Default Android `@drawable/splash` so BootTheme links without a generated bootsplash asset.
+
+### Changed
+- **React Native** `0.83.2` → **`0.86.2`**, **React** `19.2.0` → **`19.2.3`**, CLI / `@react-native/*` packages → **`0.86.2` / `20.1.0`**.
+- CLI and generated apps require **Node.js >= 22.11.0** (official RN 0.86 template).
+- Native template merge from Upgrade Helper: Gradle **9.3.1** (and wrapper jar), Gemfile `nkf`, iPad orientation keys, `SUPPORTED_PLATFORMS` / `TARGETED_DEVICE_FAMILY`, Jest preset `@react-native/jest-preset`.
+- **Gesture Handler** `^2.31.2` → **`^2.32.0`** (required for RN 0.86 `RNRenderer` removal). Stays on 2.x, not 3.x.
+- **Reanimated** `^4.4.0` → **`^4.5.3`** with **Worklets `^0.11.4`**. Babel plugin `react-native-worklets/plugin` is now last.
+- **Screens** `^4.18.0` → **`^4.27.0`**.
+- **NetInfo** pinned `11.4.1` + New Arch patch → **`^12.0.1`** (official New Arch). Patch removed.
+- **MMKV** `^4.3.2`, **NitroDeviceInfo** `^1.8.2`. **Nitro Modules stays `^0.35.9`** (MMKV 4.3.x is generated against 0.35.9).
+- **Keyboard Controller** `^1.19.5` → **`^1.22.4`**.
+- Optional Firebase (CLI-injected) `^23.5.0` → **`^26.3.0`**. Podfile sets **`$RNFirebaseDisableSPM = true`** so CocoaPods + static linkage still work (RNFirebase 26 defaults to SPM). Multi-env Podfile no longer always injects Firebase pods — only when Firebase is enabled.
+- ESLint: dropped unused/stale plugins (`autofix`, `tsc`, `prettier` as a lint rule, `promise`) and unused `@react-native/eslint-config` (still ships ESLint 8-removed rules). Replaced deprecated `@typescript-eslint/no-var-requires` with `no-require-imports`; added `react-hooks` and `@react-native/no-deep-imports`. Formatting stays in Prettier via `eslint-config-prettier`.
+- **tsconfig**: `extends` matches the RN 0.86 template (`@react-native/typescript-config`). Removed unused `@tsconfig/react-native` (`moduleResolution: "node"` / `module: "commonjs"`) and leftover `@types/react-redux`.
+
+### Removed
+- **`@d11/react-native-fast-image`** — image loading is `TurboImage` (`react-native-turbo-image`). The AndroidSVG duplicate-class exclude is no longer needed.
+
+### Notes
+- After upgrading an existing generated app: `pnpm install`, then `cd ios && pod install` (or `pnpm run clean:ios` + fresh install).
+- Liquid Glass is opt-in via the UI kit prompt and needs Xcode 26 to compile; below iOS 26 the library renders a normal View.
+
 ## [1.1.6] - 2026-05-28
 
 ### Added

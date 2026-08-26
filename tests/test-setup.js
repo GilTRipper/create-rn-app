@@ -266,6 +266,11 @@ function cleanupAll() {
   }
   // Cleanup no-env-no-firebase project
   cleanupPath(path.join("/tmp", NO_ENV_NO_FIREBASE_PROJECT.name));
+  cleanupPath("/tmp/test-envs-no-firebase");
+  cleanupPath("/tmp/test-envs-firebase");
+  cleanupPath("/tmp/test-firebase-no-maps");
+  cleanupPath("/tmp/test-ui-kit-all");
+  cleanupPath("/tmp/test-ui-kit-turbo");
 }
 
 // Create projects (will be called from main e2e.test.js)

@@ -59,6 +59,8 @@ async function createProjectWithLocalization({
 
   // Theme? -> no
   answers += "no\n";
+  // UI kit? -> no
+  answers += "no\n";
 
   // Overwrite? -> yes
   answers += "yes\n";

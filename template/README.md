@@ -22,7 +22,7 @@ A professional React Native sample project demonstrating modern mobile developme
 ## 🎯 Overview
 
 This is a sample React Native project showcasing:
-- Modern React Native architecture (0.83.2 with React 19.2.0)
+- Modern React Native architecture (0.86.2 with React 19.2.3)
 - Firebase integration (Analytics, Messaging, Remote Config)
 - Google Maps with directions
 - Custom splash screen and icons
@@ -36,7 +36,7 @@ This is a sample React Native project showcasing:
 
 Before you begin, ensure you have the following installed:
 
-- **Node.js**: Version 20 or higher
+- **Node.js**: Version 22.11.0 or higher (React Native 0.86)
 - **pnpm**: This project uses pnpm as the package manager
   ```bash
   npm install -g pnpm
@@ -45,7 +45,7 @@ Before you begin, ensure you have the following installed:
   ```bash
   npm install -g react-native-cli
   ```
-- **Xcode**: Version 14+ (for iOS development)
+- **Xcode**: Latest stable. Version 26+ is required only if you copy Liquid Glass from the UI kit (`@callstack/liquid-glass`).
 - **Android Studio**: Latest version (for Android development)
 - **CocoaPods**: For iOS dependencies
   ```bash
@@ -236,37 +236,7 @@ The project uses `react-native-bootsplash` for splash screens:
 
 This project uses `pnpm` patch feature to fix compatibility issues with certain dependencies. Patches are automatically applied during `pnpm install`.
 
-### 1. @gorhom/bottom-sheet@5.2.6
-
-**Purpose**: Fixes React Native compatibility issues with bounding client rect checks.
-
-**Changes**:
-- Fixed null checks for `getBoundingClientRect` and `unstable_getBoundingClientRect`
-- Changed from `!== null` to `typeof === "function"` checks
-- Ensures compatibility with React Native's Fabric renderer
-
-**Files affected**:
-- `lib/commonjs/hooks/useBoundingClientRect.js`
-- `lib/module/hooks/useBoundingClientRect.js`
-- `src/hooks/useBoundingClientRect.ts`
-
-### 2. @react-native-community/netinfo@11.4.1
-
-**Purpose**: Adds support for React Native's New Architecture (TurboModules).
-
-**Changes**:
-- Implemented TurboModule support for both iOS and Android
-- Split module implementation into old/new architecture paths
-- Updated Android build configuration for TurboModules
-- Added codegen configuration
-- Created separate implementations for `oldarch` and `newarch`
-
-**Files affected**:
-- Android: Build configuration, module implementation split
-- iOS: Added `.mm` implementation with TurboModule support
-- Package.json: Added codegen configuration
-
-### 3. react-native-date-picker@5.0.13
+### 1. react-native-date-picker@5.0.13
 
 **Purpose**: Adds New Architecture (TurboModules) support for the date picker.
 
@@ -282,11 +252,7 @@ This project uses `pnpm` patch feature to fix compatibility issues with certain 
 
 ### Why These Patches?
 
-These patches are necessary because:
-1. The libraries haven't released official updates with these fixes
-2. They enable compatibility with React Native's latest features
-3. They fix runtime crashes and improve stability
-4. They prepare the app for the New Architecture migration
+`@react-native-community/netinfo` was previously patched for New Architecture support. That patch was removed after upgrading to netinfo 12, which includes official New Architecture support.
 
 **Note**: When updating these dependencies, verify if official versions include these fixes to potentially remove patches.
 
@@ -447,8 +413,8 @@ src/
 ## 🔑 Key Dependencies
 
 ### Core
-- **React**: 19.2.0
-- **React Native**: 0.83.2
+- **React**: 19.2.3
+- **React Native**: 0.86.2
 - **TypeScript**: 5.8.3
 
 ### Navigation

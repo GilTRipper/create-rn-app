@@ -2,6 +2,11 @@ const inquirer = require('inquirer');
 const path = require('path');
 const fs = require('fs-extra');
 const chalk = require('chalk');
+const {
+  UI_KIT_ALL,
+  getUiKitPromptChoices,
+  resolveUiKitComponents,
+} = require("./ui-templates");
 
 async function getPrompts(projectNameArg, options) {
   const questions = [];
@@ -632,6 +637,59 @@ async function getPrompts(projectNameArg, options) {
     }
   }
 
+  let uiKit = {
+    enabled: false,
+    components: [],
+  };
+
+  if (!options.yes) {
+    const { enableUiKit } = await inquirer.prompt([
+      {
+        type: "confirm",
+        name: "enableUiKit",
+        message: "Copy UI components into src/ui/components?",
+        default: false,
+      },
+    ]);
+
+    if (enableUiKit) {
+      while (true) {
+        const { uiKitSelection } = await inquirer.prompt([
+          {
+            type: "checkbox",
+            name: "uiKitSelection",
+            message:
+              "Which UI components? Select All, or pick specific ones.",
+            choices: getUiKitPromptChoices(),
+          },
+        ]);
+
+        if (!uiKitSelection || uiKitSelection.length < 1) {
+          console.log(
+            chalk.red("Please select All or at least one component.")
+          );
+          continue;
+        }
+
+        const selected = resolveUiKitComponents(uiKitSelection);
+        if (selected.length === 0) {
+          console.log(
+            chalk.red("Please select All or at least one component.")
+          );
+          continue;
+        }
+
+        uiKit = {
+          enabled: true,
+          components: uiKitSelection.includes(UI_KIT_ALL)
+            ? [UI_KIT_ALL]
+            : selected.map(component => component.id),
+        };
+        break;
+      }
+    }
+  }
+
   // Check if directory already exists
   const projectPath = path.join(
     process.cwd(),
@@ -720,6 +778,7 @@ async function getPrompts(projectNameArg, options) {
     navigationMode,
     localization,
     theme: themeEnabled,
+    uiKit,
   };
 }
 

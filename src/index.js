@@ -133,6 +133,10 @@ async function run() {
           );
         }
 
+        if (config.uiKit?.enabled) {
+          console.log(chalk.green.bold("\n🧩 UI kit copied to src/ui/components."));
+        }
+
         console.log(chalk.cyan.bold("\n🏃 Run the app:\n"));
         console.log(chalk.white(`  ${config.packageManager} run ios`));
         console.log(chalk.white(`  ${config.packageManager} run android`));

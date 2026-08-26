@@ -16,7 +16,7 @@ Complete guide for developing and testing the `create-rn-app` CLI tool.
 
 ### Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22.11.0 (CLI and generated template apps).
 - npm, yarn, or pnpm
 - Git
 - Basic knowledge of React Native
@@ -51,6 +51,7 @@ create-rn-app/
 │   ├── index.js            # Main CLI logic & commander setup
 │   ├── prompts.js          # Interactive prompts (inquirer)
 │   ├── template.js         # Template copying and replacement
+│   ├── ui-templates.js     # Optional UI kit catalog + copy
 │   └── utils.js            # Utility functions
 ├── template/               # React Native app template
 │   ├── android/            # Android native code
@@ -60,6 +61,8 @@ create-rn-app/
 │   ├── App.tsx             # Root component
 │   ├── package.json        # App dependencies
 │   └── ...                 # Config files
+├── template-presets/       # Optional features (nav, auth, theme, i18n, maps)
+├── ui-templates/           # Optional UI components copied on demand
 ├── .npmignore              # Files to exclude from npm package
 ├── package.json            # CLI package config
 ├── CHANGELOG.md            # Version history
@@ -264,10 +267,11 @@ To update the template:
 
 ### Template Dependencies
 
-The `template/package.json` contains all React Native dependencies. Update carefully:
+The `template/package.json` contains baseline React Native dependencies. Optional features (Firebase, localization, UI kit) inject extra packages during project creation.
 
 - Test new dependencies before adding
 - Keep versions compatible
+- Put UI component packages in `src/ui-templates.js`, not in the base template
 - Update peer dependencies if needed
 
 ## Adding Features

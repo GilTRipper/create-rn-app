@@ -46,7 +46,7 @@ test('renders correctly', function () { return __awaiter(void 0, void 0, void 0,
     return __generator(this, function (_a) {
         switch (_a.label) {
             case 0: return [4 /*yield*/, react_test_renderer_1["default"].act(function () {
-                    react_test_renderer_1["default"].create(<App_1["default"] />);
+                    react_test_renderer_1["default"].create(<App_1.App />);
                 })];
             case 1:
                 _a.sent();

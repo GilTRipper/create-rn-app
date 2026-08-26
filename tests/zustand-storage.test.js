@@ -50,6 +50,10 @@ async function createProjectWithZustandStorage({
   answers += "no\n";
   // Localization? -> no
   answers += "no\n";
+  // Theme? -> no
+  answers += "no\n";
+  // UI kit? -> no
+  answers += "no\n";
 
   // Overwrite? (if exists) -> yes
   answers += "yes\n";

@@ -411,7 +411,8 @@ The generated project includes a production-ready React Native app with:
 - 📦 Zustand for state management, TanStack Query for server state
 - 🔥 Firebase (optional: Analytics, Messaging, Remote Config)
 - 🗺️ Maps integration (optional: react-native-maps with Google Maps or Mapbox)
-- 🎨 Modern UI components (Bottom Sheet, Toast, Blur View, etc.)
+- 🎨 Modern UI components (Bottom Sheet, Toast, Blur View)
+- 🧩 Optional UI kit: TurboImage, Liquid Glass (pick All or individual components)
 - 📱 Native features (Push Notifications, Geolocation, Permissions, etc.)
 - 🛠️ TypeScript, ESLint, Prettier, and development tools
 - ⚡ Performance optimizations (Hermes, Reanimated, optimized images)
@@ -420,7 +421,7 @@ The generated project includes a production-ready React Native app with:
 
 ## Requirements
 
-- **Node.js** >= 20
+- **Node.js** >= 22.11.0 (CLI and generated apps; React Native 0.86).
 - **React Native development environment** setup
   - For iOS: Xcode, CocoaPods
   - For Android: Android Studio, JDK

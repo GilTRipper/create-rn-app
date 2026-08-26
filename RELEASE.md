@@ -457,7 +457,7 @@ File: `.github/workflows/publish.yml`
 
 **Steps**:
 1. Checkout code
-2. Setup Node.js 20
+2. Setup Node.js 22
 3. Install dependencies (`npm install`)
 4. Publish to npm (`npm publish`)
 
@@ -474,7 +474,7 @@ File: `.github/workflows/test.yml`
 
 **Steps**:
 1. Checkout code
-2. Setup Node.js (matrix: 20, 22)
+2. Setup Node.js 22
 3. Install dependencies
 4. Run structure checks
 5. Test CLI commands

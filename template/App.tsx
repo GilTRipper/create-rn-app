@@ -27,10 +27,11 @@ import type { BlurViewProps } from "@danielsaraldi/react-native-blur-view";
 import type { BottomSheetBackdropProps } from "@gorhom/bottom-sheet";
 
 import type { GeolocationResponse } from "@react-native-community/geolocation";
+import type { ImagePickerResponse } from "react-native-image-picker";
 
 const IS_IOS = Platform.OS === "ios";
 export const useHandlePushNotifications = () => {
-  const handleApnsMessages = () => {
+  const _handleApnsMessages = () => {
     console.log("handleApnsMessages");
   };
 
@@ -96,8 +97,8 @@ export const useHandlePushNotifications = () => {
   }, []);
 };
 
-const origin = { latitude: 37.3318456, longitude: -122.0296002 };
-const destination = { latitude: 37.771707, longitude: -122.4053769 };
+const _origin = { latitude: 37.3318456, longitude: -122.0296002 };
+const _destination = { latitude: 37.771707, longitude: -122.4053769 };
 
 export const useLocation = () => {
   const handleError = () => {
@@ -303,7 +304,7 @@ function AppContent() {
       {
         mediaType: "photo",
       },
-      (response: any) => {
+      (response: ImagePickerResponse) => {
         console.log("response", response);
       },
     );

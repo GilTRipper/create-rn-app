@@ -5,6 +5,7 @@ const ora = require("ora");
 const execa = require("execa");
 const crypto = require("crypto");
 const { replaceInFile } = require("./utils");
+const { copyUiKit } = require("./ui-templates");
 
 const capitalize = str => str.charAt(0).toUpperCase() + str.slice(1);
 
@@ -984,16 +985,16 @@ async function addFirebaseDependencies(
 
   packageData.dependencies = packageData.dependencies || {};
   const firebaseDeps = {
-    "@react-native-firebase/app": "^23.5.0",
+    "@react-native-firebase/app": "^26.3.0",
   };
   if (modules.includes("analytics")) {
-    firebaseDeps["@react-native-firebase/analytics"] = "^23.5.0";
+    firebaseDeps["@react-native-firebase/analytics"] = "^26.3.0";
   }
   if (modules.includes("remote-config")) {
-    firebaseDeps["@react-native-firebase/remote-config"] = "^23.5.0";
+    firebaseDeps["@react-native-firebase/remote-config"] = "^26.3.0";
   }
   if (modules.includes("messaging")) {
-    firebaseDeps["@react-native-firebase/messaging"] = "^23.5.0";
+    firebaseDeps["@react-native-firebase/messaging"] = "^26.3.0";
   }
 
   packageData.dependencies = { ...packageData.dependencies, ...firebaseDeps };
@@ -1173,14 +1174,22 @@ async function updatePodfileForFirebase(projectPath, modules = []) {
 
   let content = await fs.readFile(podfilePath, "utf8");
 
+  if (!content.includes("$RNFirebaseDisableSPM")) {
+    content = `$RNFirebaseDisableSPM = true\n${content}`;
+  }
+
+  if (
+    modules.includes("analytics") &&
+    !content.includes("$RNFirebaseAnalyticsWithoutAdIdSupport")
+  ) {
+    content = `$RNFirebaseAnalyticsWithoutAdIdSupport = true\n${content}`;
+  }
+
   if (!content.includes("FirebaseCore")) {
     const basePods = [
       "  pod 'FirebaseCore', :modular_headers => true",
       "  pod 'GoogleUtilities', :modular_headers => true",
     ];
-    if (modules.includes("analytics")) {
-      basePods.push("  $RNFirebaseAnalyticsWithoutAdIdSupport = true");
-    }
     if (modules.includes("remote-config")) {
       basePods.push("  pod 'FirebaseRemoteConfig', :modular_headers => true");
       basePods.push("  pod 'FirebaseABTesting', :modular_headers => true");
@@ -2554,7 +2563,12 @@ async function createIosEnvSchemes(
   );
 }
 
-async function updatePodfileForEnvs(selectedEnvs, projectPath, projectName) {
+async function updatePodfileForEnvs(
+  selectedEnvs,
+  projectPath,
+  projectName,
+  { firebaseEnabled = false, firebaseModules = [] } = {}
+) {
   if (!selectedEnvs || selectedEnvs.length < 1) return;
 
   const podfilePath = path.join(projectPath, "ios/Podfile");
@@ -2581,6 +2595,28 @@ async function updatePodfileForEnvs(selectedEnvs, projectPath, projectName) {
       )
       .join("\n") + prodTargetBlock;
 
+  const firebaseFlags = firebaseEnabled
+    ? `$RNFirebaseDisableSPM = true${
+        firebaseModules.includes("analytics")
+          ? "\n$RNFirebaseAnalyticsWithoutAdIdSupport = true"
+          : ""
+      }\n\n`
+    : "";
+
+  const firebasePods = firebaseEnabled
+    ? `  pod 'FirebaseCore', :modular_headers => true
+  pod 'GoogleUtilities', :modular_headers => true
+${
+  firebaseModules.includes("remote-config")
+    ? `  pod 'FirebaseRemoteConfig', :modular_headers => true
+  pod 'FirebaseABTesting', :modular_headers => true
+  pod 'FirebaseInstallations', :modular_headers => true
+`
+    : ""
+}
+`
+    : "";
+
   const podfileContent = `def node_require(script)
   # Resolve script with node to allow for hoisting
   require Pod::Executable.execute_command('node', ['-p',
@@ -2594,7 +2630,7 @@ end
 node_require('react-native/scripts/react_native_pods.rb')
 node_require('react-native-permissions/scripts/setup.rb')
 
-platform :ios, 15.6
+${firebaseFlags}platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
 setup_permissions([
@@ -2621,16 +2657,9 @@ abstract_target '${projectName}CommonPods' do
     :app_path => "\#{Pod::Config.instance.installation_root}/.."
   )
 
-  pod 'FirebaseCore', :modular_headers => true
-  pod 'GoogleUtilities', :modular_headers => true
-  
-  # Google Maps для react-native-maps
+${firebasePods}  # Google Maps для react-native-maps
   rn_maps_path = '../node_modules/react-native-maps'
   pod 'react-native-maps/Google', :path => rn_maps_path
-  
-  pod 'FirebaseRemoteConfig', :modular_headers => true
-  pod 'FirebaseABTesting', :modular_headers => true
-  pod 'FirebaseInstallations', :modular_headers => true
 
 ${targetBlocks}
   post_install do |installer|
@@ -6178,6 +6207,7 @@ async function createApp(config) {
     navigationMode = "none",
     localization = {},
     theme = false,
+    uiKit = {},
   } = config;
 
   const templatePath = path.join(__dirname, "../template");
@@ -6495,7 +6525,10 @@ async function createApp(config) {
         projectPath,
         bundleIdentifier
       );
-      await updatePodfileForEnvs(selectedEnvs, projectPath, projectName);
+      await updatePodfileForEnvs(selectedEnvs, projectPath, projectName, {
+        firebaseEnabled,
+        firebaseModules,
+      });
       const buildableRefs = await createIosTargetsForEnvs(
         selectedEnvs,
         projectPath,
@@ -7067,6 +7100,14 @@ export const zustandStorage: StateStorage = {
     if (themeEnabled) {
       await copyThemeTemplate(projectPath);
       await configureTheme(projectPath, zustandStorage);
+    }
+
+    const uiKitEnabled = uiKit?.enabled || false;
+    const uiKitComponents = Array.isArray(uiKit?.components)
+      ? uiKit.components
+      : [];
+    if (uiKitEnabled && uiKitComponents.length > 0) {
+      await copyUiKit(projectPath, uiKitComponents);
     }
 
     // Update App.tsx if navigation and/or localization and/or theme was selected

@@ -5,7 +5,7 @@ End-to-end tests for `@giltripper/create-rn-app` CLI tool.
 ## Running Tests Locally
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 22.11+
 - npm, pnpm, or yarn installed
 - For iOS tests: macOS with CocoaPods installed
 
@@ -42,6 +42,9 @@ npm run test:e2e -- --package-manager npm --test-pods
 9. **Dependencies**: Verifies node_modules and key dependencies
 10. **Lock Files**: Checks package manager lock file exists
 11. **CocoaPods** (optional): Validates pods installation on macOS
+12. **Environment × Firebase**: Multi-env Podfile does not inject Firebase unless enabled; with Firebase, SPM opt-out and per-env Google files are present
+13. **Node version guard**: CLI rejects Node < 22.11.0
+14. **UI kit**: Default `--yes` project skips TurboImage / Liquid Glass; All vs single-component copy injects the matching files and dependencies
 
 ## CI/CD
 

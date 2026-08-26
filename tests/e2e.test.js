@@ -9,6 +9,7 @@ const runIosTests = require("./ios.test");
 const runAndroidTests = require("./android.test");
 const runEnvironmentTests = require("./environments.test");
 const runFirebaseTests = require("./firebase.test");
+const runEnvFirebaseTests = require("./env-firebase.test");
 const runAssetsTests = require("./assets.test");
 const runFontsTests = require("./fonts.test");
 const runCliFlagsTests = require("./cli-flags.test");
@@ -17,6 +18,8 @@ const runZustandStorageTests = require("./zustand-storage.test");
 const runNavigationAuthTests = require("./navigation-auth.test");
 const runLocalizationTests = require("./localization.test");
 const runThemeTests = require("./theme.test");
+const runNodeVersionTests = require("./node-version.test");
+const runUiKitTests = require("./ui-kit.test");
 
 // Cleanup before starting
 cleanupAll();
@@ -53,6 +56,9 @@ async function runAllTests() {
   log("\n=== Running Basic Tests ===", "info");
   runBasicTests();
 
+  log("\n=== Running Node Version Tests ===", "info");
+  runNodeVersionTests();
+
   log("\n=== Running iOS Tests ===", "info");
   runIosTests();
 
@@ -64,6 +70,9 @@ async function runAllTests() {
 
   log("\n=== Running Firebase Tests ===", "info");
   runFirebaseTests();
+
+  log("\n=== Running Environment × Firebase Tests ===", "info");
+  await runEnvFirebaseTests();
 
   log("\n=== Running Assets Tests ===", "info");
   runAssetsTests();
@@ -88,6 +97,9 @@ async function runAllTests() {
 
   log("\n=== Running Theme Tests ===", "info");
   await runThemeTests();
+
+  log("\n=== Running UI Kit Tests ===", "info");
+  await runUiKitTests();
 
   // Summary
   const { testsPassed, testsFailed } = getTestStats();

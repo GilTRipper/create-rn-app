@@ -47,6 +47,8 @@ async function createProjectWithTheme({ name, bundleId, displayName, enableZusta
   if (!enableZustand) {
     answers += "no\n";
   }
+  // UI kit? -> no
+  answers += "no\n";
   // Overwrite? -> yes
   answers += "yes\n";
 

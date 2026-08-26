@@ -1,21 +1,21 @@
-// ESLint 9 flat config converted from .eslintrc.json
-
 const tsPlugin = require("@typescript-eslint/eslint-plugin");
 const tsParser = require("@typescript-eslint/parser");
-const autofixPlugin = require("eslint-plugin-autofix");
+const prettierConfig = require("eslint-config-prettier");
 const importPlugin = require("eslint-plugin-import");
 const noRelativeImportPathsPlugin = require("eslint-plugin-no-relative-import-paths");
 const reactPlugin = require("eslint-plugin-react");
+const reactHooksPlugin = require("eslint-plugin-react-hooks");
 const reactNativePlugin = require("eslint-plugin-react-native");
+const reactNativeCommunityPlugin = require("@react-native/eslint-plugin");
 
-/** @type {import("eslint").Linter.FlatConfig[]} */
+/** @type {import("eslint").Linter.Config[]} */
 module.exports = [
-  // Ignore patterns
   {
-    ignores: ["*.config.ts", "**/member.ts"],
+    ignores: ["*.config.ts", "**/member.ts", "android/**", "ios/**", "__tests__/**/*.js"],
   },
 
-  // Main config for JS/TS/React Native source files
+  prettierConfig,
+
   {
     files: ["**/*.{js,mjs,cjs,jsx,ts,tsx}"],
 
@@ -23,22 +23,34 @@ module.exports = [
       parser: tsParser,
       ecmaVersion: "latest",
       sourceType: "module",
+      parserOptions: {
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
+    },
+
+    settings: {
+      react: {
+        version: "detect",
+      },
     },
 
     plugins: {
       "@typescript-eslint": tsPlugin,
+      "@react-native": reactNativeCommunityPlugin,
       import: importPlugin,
-      autofix: autofixPlugin,
       "no-relative-import-paths": noRelativeImportPathsPlugin,
       react: reactPlugin,
+      "react-hooks": reactHooksPlugin,
       "react-native": reactNativePlugin,
     },
 
     rules: {
-      "linebreak-style": ["error", "unix"],
-      "react-native/no-inline-styles": 1,
-      quotes: ["error", "double"],
-      semi: ["error", "always"],
+      "react-native/no-inline-styles": "warn",
+      "@react-native/no-deep-imports": "warn",
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
 
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -52,19 +64,19 @@ module.exports = [
       "@typescript-eslint/explicit-member-accessibility": "error",
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/array-type": "error",
-      "@typescript-eslint/no-empty-function": 0,
-
-      curly: "error",
-      "no-useless-catch": "error",
-      "max-statements-per-line": "error",
-      "arrow-body-style": ["error", "as-needed"],
-
+      "@typescript-eslint/no-empty-function": "off",
+      "@typescript-eslint/no-require-imports": "off",
       "@typescript-eslint/consistent-type-imports": [
         "error",
         {
           prefer: "type-imports",
         },
       ],
+
+      curly: "error",
+      "no-useless-catch": "error",
+      "max-statements-per-line": "error",
+      "arrow-body-style": ["error", "as-needed"],
 
       "import/order": [
         "error",
@@ -79,18 +91,8 @@ module.exports = [
           ],
         },
       ],
-
-      "@typescript-eslint/no-var-requires": "off",
       "import/no-relative-packages": "error",
-
-      "autofix/no-unused-vars": [
-        "error",
-        {
-          argsIgnorePattern: "^_",
-          ignoreRestSiblings: true,
-          destructuredArrayIgnorePattern: "^_",
-        },
-      ],
+      "import/no-default-export": "error",
 
       "no-restricted-imports": [
         "error",
@@ -98,8 +100,6 @@ module.exports = [
           patterns: ["../"],
         },
       ],
-
-      "import/no-default-export": "error",
 
       "react/self-closing-comp": [
         "error",
@@ -120,7 +120,14 @@ module.exports = [
     },
   },
 
-  // Overrides for config files
+  {
+    files: ["**/*.{spec,test}.{ts,tsx}", "**/__tests__/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": "off",
+      "no-relative-import-paths/no-relative-import-paths": "off",
+    },
+  },
+
   {
     files: ["**/*.config.js", "**/*.config.mjs", "**/*.config.ts"],
     rules: {

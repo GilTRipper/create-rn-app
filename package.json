@@ -37,10 +37,11 @@
     "bin",
     "src",
     "template",
-    "template-presets"
+    "template-presets",
+    "ui-templates"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=22.11.0"
   },
   "dependencies": {
     "chalk": "^4.1.2",

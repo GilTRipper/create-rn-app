@@ -2,13 +2,24 @@ const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
 
+function isNodeVersionSupported(nodeVersion) {
+  const [major, minor] = String(nodeVersion)
+    .split(".")
+    .map(part => parseInt(part, 10));
+
+  if (Number.isNaN(major) || Number.isNaN(minor)) {
+    return false;
+  }
+
+  return !(major < 22 || (major === 22 && minor < 11));
+}
+
 function checkNodeVersion() {
   const nodeVersion = process.versions.node;
-  const majorVersion = parseInt(nodeVersion.split('.')[0], 10);
 
-  if (majorVersion < 20) {
+  if (!isNodeVersionSupported(nodeVersion)) {
     console.error(
-      chalk.red('Error: Node.js version 20 or higher is required.'),
+      chalk.red("Error: Node.js version 22.11.0 or higher is required."),
       chalk.yellow(`\nYou are currently running Node.js ${nodeVersion}`)
     );
     process.exit(1);
@@ -76,6 +87,7 @@ async function replaceInFilesRecursively(dirPath, replacements, extensions = ['.
 }
 
 module.exports = {
+  isNodeVersionSupported,
   checkNodeVersion,
   checkPackageManager,
   replaceInFile,

@@ -180,6 +180,8 @@ async function createProjectWithFirebase({
   answers += "no\n";
   // Theme? -> no
   answers += "no\n";
+  // UI kit? -> no
+  answers += "no\n";
   // Overwrite? (if exists) -> yes
   answers += "yes\n";
 
@@ -483,6 +485,32 @@ module.exports = function runFirebaseTests() {
       throw new Error("analytics index.ts does not contain expected exports");
     }
 
+    const iosDir = path.join(projectPath, "ios");
+    const iosEntries = fs.readdirSync(iosDir);
+    const appDir = iosEntries.find(entry => {
+      const full = path.join(iosDir, entry);
+      return fs.statSync(full).isDirectory() && fs.existsSync(path.join(full, "AppDelegate.swift"));
+    });
+    if (!appDir) {
+      throw new Error("AppDelegate.swift not found");
+    }
+    const appDelegate = fs.readFileSync(
+      path.join(iosDir, appDir, "AppDelegate.swift"),
+      "utf8"
+    );
+    if (!appDelegate.includes("import Firebase")) {
+      throw new Error("Firebase import should remain when maps are skipped");
+    }
+    if (!appDelegate.includes("FirebaseApp.configure()")) {
+      throw new Error("FirebaseApp.configure() should remain when maps are skipped");
+    }
+    if (appDelegate.includes("import GoogleMaps")) {
+      throw new Error("GoogleMaps import should be removed when maps are skipped");
+    }
+    if (appDelegate.includes("GMSServices.provideAPIKey")) {
+      throw new Error("GMSServices should be removed when maps are skipped");
+    }
+
     // Cleanup
     cleanupPath(projectPath);
   });
@@ -657,6 +685,20 @@ module.exports = function runFirebaseTests() {
     if (!deps["@react-native-firebase/messaging"]) {
       throw new Error(
         "@react-native-firebase/messaging should be added to dependencies when messaging selected"
+      );
+    }
+
+    if (!String(deps["@react-native-firebase/app"] || "").startsWith("^26.")) {
+      throw new Error(
+        `@react-native-firebase/app should be 26.x, got ${deps["@react-native-firebase/app"]}`
+      );
+    }
+
+    const podfilePath = path.join(projectPath, "ios/Podfile");
+    const podfileContent = fs.readFileSync(podfilePath, "utf8");
+    if (!podfileContent.includes("$RNFirebaseDisableSPM = true")) {
+      throw new Error(
+        "Podfile should set $RNFirebaseDisableSPM = true for CocoaPods Firebase on RN 0.86"
       );
     }
 
