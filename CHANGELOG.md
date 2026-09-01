@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **`@d11/react-native-fast-image`** — image loading is `TurboImage` (`react-native-turbo-image`). The AndroidSVG duplicate-class exclude is no longer needed.
 
+### Fixed
+- **Mapbox / App.tsx**: `Mapbox.setAccessToken` is written on generate (real token or `<MAPBOX_ACCESS_TOKEN>`). The helper existed but was never called; the insert also skipped `import …;` lines.
+- **Mapbox / iOS**: `$RNMapboxMaps.pre_install` is injected before `post_install` on the current RN Podfile (the old regex required an `end` immediately above `post_install` and never matched).
+- **Mapbox / Android**: Mapbox Maven (`api.mapbox.com/downloads/v2/releases/maven`) is appended when the RN 0.86 template has no `allprojects` block.
+- **CLI gates**: Project name (`validate-npm-package-name`) and `--bundle-id` (reverse-DNS `com.company.app`) are checked after prompts and before generation. Passing `--bundle-id INVALID` with `--yes` no longer skipped the interactive validator.
+
 ### Notes
 - After upgrading an existing generated app: `pnpm install`, then `cd ios && pod install` (or `pnpm run clean:ios` + fresh install).
 - Liquid Glass is opt-in via the UI kit prompt and needs Xcode 26 to compile; below iOS 26 the library renders a normal View.

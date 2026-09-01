@@ -1,0 +1,22 @@
+---
+description: Feature module contract for prompt.js and apply.js
+globs: src/features/**/*.js
+alwaysApply: false
+---
+
+# Feature modules
+
+Each feature (except `auth`) exports `{ prompt, apply }` from `index.js`.
+
+```js
+async function prompt(ctx) { /* mutate ctx.config; respect ctx.options.yes */ }
+async function apply(ctx) { /* write into ctx.config.projectPath */ }
+```
+
+- Read/write `ctx.config` only. Do not require other `src/features/*` modules.
+  Exception already in tree: `environments/ios-schemes.js` may use `assets/fonts` helpers (`addFontsToInfoPlistForPath`, `addInfoPlistsToXcodeProject`). Do not add new cross-feature imports.
+- `--yes` / `options.yes`: skip interactive questions and leave disabled defaults.
+- Wire new features explicitly in `src/get-prompts.js` and `src/core/create-app.js`. No plugin registry.
+- `auth` is apply-only; navigation prompt sets `navigationMode`.
+
+Зачем: зависимости фич (storage, firebase remote-config, env files) безопасны только когда порядок виден в оркестраторе.

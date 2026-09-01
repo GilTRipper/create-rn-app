@@ -49,10 +49,24 @@ create-rn-app/
 │   └── cli.js              # Entry point (executable)
 ├── src/
 │   ├── index.js            # Main CLI logic & commander setup
-│   ├── prompts.js          # Interactive prompts (inquirer)
-│   ├── template.js         # Template copying and replacement
-│   ├── ui-templates.js     # Optional UI kit catalog + copy
-│   └── utils.js            # Utility functions
+│   ├── prompts.js          # Facade: getPrompts
+│   ├── get-prompts.js      # Prompt pipeline
+│   ├── template.js         # Facade: createApp
+│   ├── ui-templates.js     # Facade: UI kit catalog (tests)
+│   ├── utils.js            # Utility functions
+│   ├── shared/             # Path helpers, Xcode IDs
+│   ├── core/               # Copy template, placeholders, install
+│   └── features/           # Optional modules (prompt + apply)
+│       ├── assets/
+│       ├── environments/
+│       ├── firebase/
+│       ├── maps/
+│       ├── storage/
+│       ├── auth/
+│       ├── navigation/
+│       ├── localization/
+│       ├── theme/
+│       └── ui-kit/
 ├── template/               # React Native app template
 │   ├── android/            # Android native code
 │   ├── ios/                # iOS native code
@@ -63,6 +77,13 @@ create-rn-app/
 │   └── ...                 # Config files
 ├── template-presets/       # Optional features (nav, auth, theme, i18n, maps)
 ├── ui-templates/           # Optional UI components copied on demand
+├── tests/
+│   ├── unit/               # Fast node:test helpers
+│   ├── e2e/                # Generator e2e via createApp()
+│   └── helpers/            # generateProject + fs asserts
+├── .cursor/                # Cursor rules + skills (not published)
+├── AGENTS.md               # Pointer: read CLAUDE.md
+├── CLAUDE.md               # Short agent instructions
 ├── .npmignore              # Files to exclude from npm package
 ├── package.json            # CLI package config
 ├── CHANGELOG.md            # Version history
@@ -70,6 +91,8 @@ create-rn-app/
 ├── README.md               # User documentation
 └── RELEASE.md              # Release process documentation
 ```
+
+Agent-facing docs: start at `CLAUDE.md`. This file stays the long human guide.
 
 ### Key Files
 
@@ -83,16 +106,16 @@ create-rn-app/
 - Commander.js setup
 - Command parsing and validation
 
-#### `src/prompts.js`
-- Interactive prompts using inquirer
-- Project name input
-- Package manager selection
-- Other configuration options
+#### `src/prompts.js` / `src/get-prompts.js`
+- Interactive prompt pipeline
+- `src/prompts.js` re-exports `getPrompts`
+- Feature questions live in `src/features/<name>/prompt.js`
 
-#### `src/template.js`
-- Template copying logic
-- Placeholder replacement
-- File name transformations
+#### `src/template.js` / `src/core/create-app.js`
+- Project generation pipeline
+- `src/template.js` re-exports `createApp`
+- Core copy/rename/install lives in `src/core/`
+- Optional features apply via `src/features/<name>/apply.js`
 
 #### `src/utils.js`
 - Utility functions
@@ -149,6 +172,14 @@ node --inspect-brk bin/cli.js TestApp
 ```
 
 ## Testing
+
+```bash
+npm test              # unit (tests/unit)
+npm run test:e2e      # generator e2e (createApp, then cleanup)
+npm run test:all      # both
+```
+
+Generator e2e does **not** use inquirer. Enable a feature by passing it to `createApp` via `tests/helpers/generate.js`. See `tests/README.md`.
 
 ### Manual Testing Checklist
 
@@ -262,7 +293,7 @@ To update the template:
 
 1. Add file to `template/` directory
 2. If it contains project name, use placeholders
-3. Update `src/template.js` if special handling needed
+3. Update `src/core/` if special handling needed
 4. Test by creating a project
 
 ### Template Dependencies
@@ -271,7 +302,7 @@ The `template/package.json` contains baseline React Native dependencies. Optiona
 
 - Test new dependencies before adding
 - Keep versions compatible
-- Put UI component packages in `src/ui-templates.js`, not in the base template
+- Put UI component packages in `src/features/ui-kit/`, not in the base template
 - Update peer dependencies if needed
 
 ## Adding Features
@@ -289,10 +320,10 @@ program
   });
 ```
 
-2. **Update prompts** in `src/prompts.js` (if interactive):
+2. **Update prompts** in `src/core/project-prompt.js` or `src/features/<name>/prompt.js` (if interactive):
 
 ```javascript
-questions.push({
+ctx.questions.push({
   type: 'input',
   name: 'newOption',
   message: 'Enter value for new option:',
@@ -306,43 +337,38 @@ questions.push({
 
 ### Adding a New Prompt
 
-Edit `src/prompts.js`:
+Add `src/features/<name>/prompt.js` and call it from `src/get-prompts.js`:
 
 ```javascript
-// List selection
-questions.push({
-  type: 'list',
-  name: 'feature',
-  message: 'Select a feature:',
-  choices: ['Feature1', 'Feature2', 'Feature3'],
-  default: 'Feature1'
-});
-
-// Confirmation
-questions.push({
-  type: 'confirm',
-  name: 'includeFeature',
-  message: 'Include this feature?',
-  default: true
-});
+async function prompt(ctx) {
+  if (ctx.options.yes) {
+    return;
+  }
+  const { includeFeature } = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "includeFeature",
+      message: "Include this feature?",
+      default: true,
+    },
+  ]);
+  ctx.config.includeFeature = includeFeature;
+}
 ```
 
 ### Adding Template Modifications
 
-Edit `src/template.js`:
+Add `src/features/<name>/apply.js` and call it from `src/core/create-app.js`:
 
 ```javascript
-async function createApp(projectName, options) {
-  // ... existing code ...
-  
-  // Add custom logic
-  if (options.customFeature) {
-    // Modify files
-    const filePath = path.join(projectDir, 'some-file.js');
-    let content = fs.readFileSync(filePath, 'utf8');
-    content = content.replace(/pattern/, 'replacement');
-    fs.writeFileSync(filePath, content);
+async function apply(ctx) {
+  if (!ctx.config.customFeature) {
+    return;
   }
+  const filePath = path.join(ctx.config.projectPath, "some-file.js");
+  let content = await fs.readFile(filePath, "utf8");
+  content = content.replace(/pattern/, "replacement");
+  await fs.writeFile(filePath, content, "utf8");
 }
 ```
 

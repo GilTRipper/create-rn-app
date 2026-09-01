@@ -24,7 +24,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Check package structure
         run: |
@@ -32,6 +32,9 @@ jobs:
           test -f src/index.js
           test -d template
           echo "✅ Package structure looks good"
+
+      - name: Unit tests
+        run: npm test
 
       - name: Test CLI help
         run: |

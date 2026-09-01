@@ -1,0 +1,16 @@
+---
+description: Paths that need an explicit user request and approval
+globs: .npmignore,.github/workflows/**,template/package.json,template/android/gradle/wrapper/**,template/ios/**/*.pbxproj
+alwaysApply: false
+---
+
+# Guarded paths
+
+Stop and ask before editing these files.
+
+- `.npmignore` — controls the published tarball
+- `.github/workflows/*` — CI/CD; explain the reason, wait for approval
+- `template/package.json` — baseline RN versions for every generated app
+- `template/android/gradle/wrapper/**` and `template/ios/**/*.pbxproj` — no drive-by native churn
+
+If the task seems to require a change here, state why in one sentence and wait.

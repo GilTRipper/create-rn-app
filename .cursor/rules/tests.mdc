@@ -1,0 +1,15 @@
+---
+description: When to run and write CLI tests
+alwaysApply: true
+---
+
+# Tests
+
+After writing a feature, changing `src/`, updating template/presets/ui-templates, or bumping packages: run the matching tests and fix failures before you stop.
+
+- `npm test` — unit (`tests/unit`). Always after `src/` helper/utils/catalog changes.
+- `npm run test:e2e` — generator e2e via `createApp` (`tests/e2e`). After feature prompt/apply, template, or preset changes. Slice: `npm run test:e2e -- maps`. Full e2e if apply order or shared files (`App.tsx`, Podfile, package.json) changed.
+- New feature or new helper: add a test in the same change. If you change a block that other suites already cover, update those suites too.
+- Proof is `createApp({ skipInstall: true, skipGit: true, skipPods: true })`. No inquirer stdin.
+
+Зачем: unit ловит логику без генерации; e2e ловит «файлы реально появились и почистились».

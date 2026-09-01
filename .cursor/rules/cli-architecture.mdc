@@ -1,0 +1,20 @@
+---
+description: How this RN CLI is structured and what must not be edited without approval
+alwaysApply: true
+---
+
+# CLI architecture
+
+Package `@giltripper/create-rn-app`, command `create-rn-app`.
+
+- Prompts: `src/get-prompts.js`. Apply: `src/core/create-app.js`.
+- `src/prompts.js` and `src/template.js` are facades only.
+- Optional work lives in `src/features/<name>/{prompt,apply}.js`. Features mutate `ctx.config` and do not import other features.
+- Base app is `template/`. Presets are `template-presets/`. UI kit is `ui-templates/` + `src/features/ui-kit/`.
+- CLI `src/**` is CommonJS JS (TS later). Do not start a migration unless asked. Keep new JS TS-friendly (named exports, no new CJS-only tricks).
+
+Forbidden without an explicit request **and** approval: `template/package.json` versions, `.npmignore`, `.github/workflows/*` (explain why first), “drive-by” edits to `template/android` gradle wrapper or `template/ios/**/*.pbxproj`.
+
+After `src/` / feature / template / package changes: `npm test` and the matching `npm run test:e2e`. New code gets tests; shared files update existing suites.
+
+Canonical write-up: `CLAUDE.md`. Human guide: `DEVELOPMENT.md` (do not load unless needed).

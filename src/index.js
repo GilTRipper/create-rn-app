@@ -1,10 +1,10 @@
 const { program } = require('commander');
 const chalk = require('chalk');
 const path = require('path');
-const validateProjectName = require('validate-npm-package-name');
 const { getPrompts } = require('./prompts');
 const { createApp } = require('./template');
 const { checkNodeVersion, checkPackageManager } = require("./utils");
+const { collectCliGateErrors } = require("./cli-validate");
 const packageJson = require("../package.json");
 
 async function run() {
@@ -51,13 +51,15 @@ async function run() {
           }
         }
 
-        // Validate project name
-        const validation = validateProjectName(config.projectName);
-        if (!validation.validForNewPackages) {
-          console.error(
-            chalk.red("\n❌ Invalid project name:"),
-            validation.errors?.join(", ") || validation.warnings?.join(", ")
-          );
+        const gateErrors = collectCliGateErrors({
+          projectName: config.projectName,
+          bundleIdentifier: config.bundleIdentifier,
+        });
+        if (gateErrors.length > 0) {
+          console.error(chalk.red("\n❌ Invalid project configuration:"));
+          for (const message of gateErrors) {
+            console.error(chalk.red(`  ${message}`));
+          }
           process.exit(1);
         }
 

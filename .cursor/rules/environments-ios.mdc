@@ -1,0 +1,13 @@
+---
+description: Do not rewrite iOS target/pbxproj generation
+globs: src/features/environments/**
+alwaysApply: false
+---
+
+# iOS environments
+
+`createIosTargetsForEnvs` in `ios-targets.js` is one fragile algorithm (~2k lines). **Do not** split or “clean up” its internals unless the user asked to change that algorithm.
+
+Mechanical file moves are OK. Behavior-changing regex/pbxproj edits need a failing test or an explicit request.
+
+Android env flavors live in `android.js` (`copyAndroidEnvSources`, `updateAndroidBuildGradle`) and are already called from `apply.js`.

@@ -1,65 +1,26 @@
-# E2E Tests
+# Tests
 
-End-to-end tests for `@giltripper/create-rn-app` CLI tool.
+Two layers, both non-interactive.
 
-## Running Tests Locally
-
-### Prerequisites
-- Node.js 22.11+
-- npm, pnpm, or yarn installed
-- For iOS tests: macOS with CocoaPods installed
-
-### Run all tests with default package manager (npm)
+| Command | What it does |
+|---|---|
+| `npm test` | Unit tests (`tests/unit`, `node --test`). Fast, no generated app. |
+| `npm run test:e2e` | Generator e2e (`tests/e2e`). Calls `createApp()`, asserts files, deletes the temp project. |
+| `npm run test:all` | Unit then e2e. |
 
 ```bash
+npm test
 npm run test:e2e
-```
-
-### Run tests with specific package manager
-
-```bash
-npm run test:e2e -- --package-manager npm
+npm run test:e2e -- maps
+npm run test:e2e -- app-tsx localization
 npm run test:e2e -- --package-manager pnpm
-npm run test:e2e -- --package-manager yarn
+npm run test:e2e -- --package-manager npm --test-pods   # macOS: also check that `pod` exists
 ```
 
-### Run tests with iOS CocoaPods (macOS only)
+Slice names are `tests/e2e/<name>.test.js` basenames (`maps`, `app-tsx`, `firebase`). Use a slice after a single-feature change; run the full e2e when apply order or shared files (`App.tsx`, Podfile, `package.json`) changed.
 
-```bash
-npm run test:e2e -- --package-manager npm --test-pods
-```
+Do not pipe inquirer answers. Feature coverage goes through `createApp({ skipInstall, skipGit, skipPods })` in `tests/helpers/generate.js`.
 
-## What Tests Cover
+`--yes` / `autoYes` leaves optional features **off**. To test a feature, pass it in the `createApp` config.
 
-1. **Project Creation**: Verifies CLI creates project with correct flags
-2. **Project Structure**: Checks all required files and directories exist
-3. **Package.json**: Validates package name and configuration
-4. **App.json**: Validates display name
-5. **AndroidManifest.xml**: Checks package attribute is set correctly
-6. **Podfile**: Validates iOS target name
-7. **iOS Structure**: Checks Xcode project files
-8. **Android Structure**: Validates Kotlin package structure
-9. **Dependencies**: Verifies node_modules and key dependencies
-10. **Lock Files**: Checks package manager lock file exists
-11. **CocoaPods** (optional): Validates pods installation on macOS
-12. **Environment × Firebase**: Multi-env Podfile does not inject Firebase unless enabled; with Firebase, SPM opt-out and per-env Google files are present
-13. **Node version guard**: CLI rejects Node < 22.11.0
-14. **UI kit**: Default `--yes` project skips TurboImage / Liquid Glass; All vs single-component copy injects the matching files and dependencies
-
-## CI/CD
-
-Tests run automatically on:
-- Push to `main` or `develop` branches
-- Pull requests to `main` or `develop`
-- Manual workflow dispatch
-
-The GitHub Actions workflow tests:
-- npm on Ubuntu
-- pnpm on Ubuntu
-- yarn on Ubuntu
-- iOS CocoaPods on macOS
-
-## Test Project Location
-
-Tests create a temporary project in `/tmp/test-e2e-app` which is automatically cleaned up after tests complete.
-
+Temp projects live under `os.tmpdir()` and are removed in `after()` hooks.
