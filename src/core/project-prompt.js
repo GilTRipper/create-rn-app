@@ -3,6 +3,8 @@ const fs = require("fs-extra");
 const chalk = require("chalk");
 const { validateBundleIdentifier } = require("../cli-validate");
 
+const DEFAULT_PROJECT_NAME = "MyApp";
+
 function collectQuestions(ctx) {
   const { projectNameArg, options } = ctx;
   ctx.questions = ctx.questions || [];
@@ -12,7 +14,7 @@ function collectQuestions(ctx) {
       type: "input",
       name: "projectName",
       message: "What is your project name?",
-      default: "MyApp",
+      default: DEFAULT_PROJECT_NAME,
       validate: input => {
         if (!input || input.trim().length === 0) {
           return "Project name is required";
@@ -119,4 +121,9 @@ async function confirmOverwrite(ctx) {
   }
 }
 
-module.exports = { collectQuestions, applyAnswers, confirmOverwrite };
+module.exports = {
+  DEFAULT_PROJECT_NAME,
+  collectQuestions,
+  applyAnswers,
+  confirmOverwrite,
+};

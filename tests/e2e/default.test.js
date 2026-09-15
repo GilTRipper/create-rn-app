@@ -2,7 +2,16 @@ const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { execSync } = require("child_process");
 const { generateProject, cleanup, testPodsEnabled } = require("../helpers/generate");
-const { exists, readJson, readText, readAppDelegate, join } = require("../helpers/fs");
+const {
+  exists,
+  readJson,
+  readText,
+  readAppDelegate,
+  findIosAppDir,
+  join,
+} = require("../helpers/fs");
+const { CHECKS } = require("../helpers/expectations");
+const { collectCliGateErrors } = require("../../src/cli-validate");
 const fs = require("fs");
 
 describe("default generated app", () => {
@@ -215,6 +224,64 @@ describe("default generated app", () => {
   if (testPodsEnabled() && process.platform === "darwin") {
     it("has CocoaPods available when --test-pods is set", () => {
       execSync("which pod", { stdio: "pipe" });
+    });
+  }
+});
+
+// The generator is built for PascalCase names: replace-placeholders.js swaps
+// `HelloWorld` for the name as typed and `helloworld` for its lowercase form.
+// The CLI gate used to reject capitals outright, which rejected even the
+// project name prompt's own default.
+describe("PascalCase project name", () => {
+  let generated;
+
+  before(async () => {
+    generated = await generateProject("E2EPascalApp", {
+      displayName: "Pascal E2E",
+      bundleIdentifier: "com.test.e2epascal",
+    });
+  });
+
+  after(() => cleanup(generated.projectPath));
+
+  it("passes the CLI gate that runs before generation", () => {
+    assert.deepEqual(
+      collectCliGateErrors({
+        projectName: generated.projectName,
+        bundleIdentifier: generated.config.bundleIdentifier,
+      }),
+      []
+    );
+  });
+
+  it("keeps the capitals in the name as typed", () => {
+    assert.match(generated.projectName, /[A-Z]/);
+  });
+
+  it("lowercases the name everywhere npm and Gradle require it", () => {
+    const lowercased = generated.projectName.toLowerCase();
+
+    assert.equal(readJson(generated.projectPath, "package.json").name, lowercased);
+    assert.equal(readJson(generated.projectPath, "app.json").name, lowercased);
+    assert.match(
+      readText(generated.projectPath, "android/settings.gradle"),
+      new RegExp(`rootProject\\.name = '${lowercased}'`)
+    );
+  });
+
+  it("keeps the iOS target and directories in PascalCase", () => {
+    assert.equal(findIosAppDir(generated.projectPath), generated.projectName);
+    assert.ok(
+      exists(generated.projectPath, "ios", `${generated.projectName}.xcodeproj`)
+    );
+    assert.ok(
+      exists(generated.projectPath, "ios", `${generated.projectName}.xcworkspace`)
+    );
+  });
+
+  for (const [name, check] of CHECKS) {
+    it(`holds the ${name} invariants`, () => {
+      check(generated);
     });
   }
 });

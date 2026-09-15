@@ -7,7 +7,20 @@ const {
   resolveUiKitComponents,
 } = require("./catalog");
 
+const meta = {
+  id: "ui-kit",
+  title: "UI kit",
+  description: "Ready-made components copied into src/ui/components",
+  addable: true,
+};
+
+function isInstalled(config) {
+  return Boolean(config?.uiKit?.enabled);
+}
+
 module.exports = {
+  meta,
+  isInstalled,
   prompt,
   apply,
   copyUiKit,

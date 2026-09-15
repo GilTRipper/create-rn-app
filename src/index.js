@@ -1,13 +1,15 @@
-const { program } = require('commander');
-const chalk = require('chalk');
-const path = require('path');
-const { getPrompts } = require('./prompts');
-const { createApp } = require('./template');
-const { checkNodeVersion, checkPackageManager } = require("./utils");
-const { collectCliGateErrors } = require("./cli-validate");
+const { program } = require("commander");
+const { createCommand } = require("./commands/create");
+const { featuresCommand } = require("./commands/features");
+const { healthcheckCommand } = require("./commands/healthcheck");
 const packageJson = require("../package.json");
 
-async function run() {
+const PROJECT_PATH_FLAG = [
+  "--path <path>",
+  "Project directory (defaults to the current one)",
+];
+
+function run() {
   program
     .name("create-rn-app")
     .description("Create a new React Native app with pre-configured setup")
@@ -34,126 +36,21 @@ async function run() {
       "--app-icon-dir <path>",
       "Path to directory with app icons (optional, from appicon.co output)"
     )
-    .action(async (projectName, options) => {
-      try {
-        console.log(chalk.cyan.bold("\n🚀 Create React Native App\n"));
+    .action(createCommand);
 
-        // Check Node version
-        checkNodeVersion();
+  program
+    .command("features")
+    .description("List optional features and what a project already has")
+    .option(...PROJECT_PATH_FLAG)
+    .action(featuresCommand);
 
-        // Get project configuration
-        const config = await getPrompts(projectName, options);
-
-        // Check if package manager is installed
-        if (!config.skipInstall) {
-          if (!checkPackageManager(config.packageManager)) {
-            process.exit(1);
-          }
-        }
-
-        const gateErrors = collectCliGateErrors({
-          projectName: config.projectName,
-          bundleIdentifier: config.bundleIdentifier,
-        });
-        if (gateErrors.length > 0) {
-          console.error(chalk.red("\n❌ Invalid project configuration:"));
-          for (const message of gateErrors) {
-            console.error(chalk.red(`  ${message}`));
-          }
-          process.exit(1);
-        }
-
-        // Create the app
-        await createApp(config);
-
-        // Success message
-        console.log(chalk.green.bold("\n" + "=".repeat(50)));
-        console.log(chalk.green.bold("✅ Project created successfully!"));
-        console.log(chalk.green.bold("=".repeat(50) + "\n"));
-
-        console.log(chalk.cyan.bold("📂 Next steps:\n"));
-        console.log(chalk.white(`  cd ${config.projectName}`));
-
-        if (config.skipInstall) {
-          console.log(chalk.white(`  ${config.packageManager} install`));
-          if (process.platform === "darwin") {
-            console.log(chalk.white(`  cd ios && pod install`));
-          }
-        }
-
-        if (config.firebase?.enabled) {
-          console.log(chalk.yellow.bold("\n📱 Setup Firebase:"));
-          console.log(
-            chalk.white(
-              "  Firebase enabled. We copied Google config files for selected environments."
-            )
-          );
-          console.log(
-            chalk.white(
-              "  Verify google-services.json and GoogleService-Info.plist are present for each environment."
-            )
-          );
-        } else {
-          console.log(
-            chalk.yellow.bold(
-              "\nℹ️  Firebase skipped (enable it when creating the project to auto-configure)."
-            )
-          );
-        }
-
-        if (config.maps?.enabled) {
-          if (config.maps?.provider === "google-maps") {
-            if (config.maps?.googleMapsApiKey) {
-              console.log(
-                chalk.green.bold("\n🗺️  Google Maps: API key configured!")
-              );
-            } else {
-              console.log(chalk.yellow.bold("\n🗺️  Setup Google Maps:"));
-              console.log(
-                chalk.white(
-                  "  1. Add GOOGLE_MAPS_API_KEY to android/local.properties"
-                )
-              );
-              console.log(
-                chalk.white(
-                  "  2. Update Google Maps API key in ios/AppDelegate.swift"
-                )
-              );
-            }
-          } else {
-            console.log(
-              chalk.green.bold(
-                "\n🗺️  Maps: react-native-maps configured (using Apple Maps on iOS)"
-              )
-            );
-          }
-        } else {
-          console.log(
-            chalk.yellow.bold(
-              "\nℹ️  Maps skipped (enable it when creating the project to auto-configure)."
-            )
-          );
-        }
-
-        if (config.uiKit?.enabled) {
-          console.log(chalk.green.bold("\n🧩 UI kit copied to src/ui/components."));
-        }
-
-        console.log(chalk.cyan.bold("\n🏃 Run the app:\n"));
-        console.log(chalk.white(`  ${config.packageManager} run ios`));
-        console.log(chalk.white(`  ${config.packageManager} run android`));
-
-        console.log(
-          chalk.gray("\n📚 For more info, check SETUP.md in your project\n")
-        );
-      } catch (error) {
-        console.error(chalk.red("\n❌ Error creating project:"), error.message);
-        process.exit(1);
-      }
-    });
+  program
+    .command("healthcheck")
+    .description("Report the state of a project created by create-rn-app")
+    .option(...PROJECT_PATH_FLAG)
+    .action(healthcheckCommand);
 
   program.parse();
 }
 
 run();
-

@@ -4,6 +4,7 @@ const { replacePlaceholders } = require("./replace-placeholders");
 const { renameNative } = require("./rename-native");
 const { updateAppTsx } = require("./update-app-tsx");
 const { install, setupXcodeEnvLocal } = require("./install");
+const { writeManifest } = require("../manifest");
 const assets = require("../features/assets");
 const environments = require("../features/environments");
 const firebase = require("../features/firebase");
@@ -45,6 +46,11 @@ async function createApp(config) {
 
   await setupXcodeEnvLocal(config.projectPath);
   await assets.copySplashAndIcons(ctx);
+
+  // Before install(): the manifest records hashes of what we generated, and it
+  // has to exist by the time install() makes the initial git commit.
+  await writeManifest(ctx);
+
   await install(ctx);
 }
 

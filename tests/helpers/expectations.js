@@ -73,7 +73,13 @@ function checkCore({ projectPath, projectName, config }) {
   }
   assert.equal(exists(projectPath, "_gitignore"), false, "_gitignore was not renamed");
 
-  assert.equal(readJson(projectPath, "package.json").name, projectName);
+  // package.json carries the lowercase form of the name (replace-placeholders
+  // swaps `helloworld` for projectName.toLowerCase()), while the iOS target and
+  // directories below keep the name as typed.
+  assert.equal(
+    readJson(projectPath, "package.json").name,
+    projectName.toLowerCase()
+  );
   assert.equal(readJson(projectPath, "app.json").displayName, config.displayName);
 
   assert.ok(exists(projectPath, "ios", projectName, "Info.plist"));

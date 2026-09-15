@@ -13,3 +13,5 @@ dist/
 !template/
 
 .pnpm-store/
+# Local working notes (not committed)
+TODO.md

@@ -5,11 +5,14 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const {
+  RESERVED_COMMAND_NAMES,
   validateNpmProjectName,
+  validateReservedName,
   validateBundleIdentifier,
   collectCliGateErrors,
 } = require("../../src/cli-validate");
 const { isNodeVersionSupported } = require("../../src/utils");
+const { DEFAULT_PROJECT_NAME } = require("../../src/core/project-prompt");
 
 const cliPath = path.join(__dirname, "../../bin/cli.js");
 const describeCliEntry = isNodeVersionSupported(process.versions.node)
@@ -22,10 +25,33 @@ describe("validateNpmProjectName", () => {
     assert.equal(validateNpmProjectName("create-rn-shop"), null);
   });
 
+  // replace-placeholders.js swaps `HelloWorld` for the name as typed and
+  // `helloworld` for its lowercase form, so PascalCase is what the generator is
+  // built for - only the lowercase form has to be npm-safe.
+  it("accepts PascalCase names, which is what the generator expects", () => {
+    assert.equal(validateNpmProjectName("MyApp"), null);
+    assert.equal(validateNpmProjectName("MyPascalApp"), null);
+    assert.equal(validateNpmProjectName("Shop2Go"), null);
+  });
+
+  it("accepts the project name prompt's own default", () => {
+    assert.equal(validateNpmProjectName(DEFAULT_PROJECT_NAME), null);
+    assert.deepEqual(
+      collectCliGateErrors({
+        projectName: DEFAULT_PROJECT_NAME,
+        bundleIdentifier: "com.company.app",
+        nodeVersion: "22.11.0",
+      }),
+      []
+    );
+  });
+
   it("rejects names that validate-npm-package-name would block", () => {
     assert.ok(validateNpmProjectName("My App"));
     assert.ok(validateNpmProjectName("HTTP"));
     assert.ok(validateNpmProjectName(".hidden"));
+    assert.ok(validateNpmProjectName("node_modules"));
+    assert.ok(validateNpmProjectName(""));
     assert.match(validateNpmProjectName("My App"), / /i);
   });
 });
@@ -43,6 +69,33 @@ describe("validateBundleIdentifier", () => {
     assert.equal(validateBundleIdentifier("com."), message);
     assert.equal(validateBundleIdentifier(""), message);
     assert.equal(validateBundleIdentifier(undefined), message);
+  });
+});
+
+describe("validateReservedName", () => {
+  it("rejects every command name, whatever the casing", () => {
+    for (const name of RESERVED_COMMAND_NAMES) {
+      assert.ok(validateReservedName(name), `${name} should be reserved`);
+      assert.ok(validateReservedName(name.toUpperCase()));
+    }
+  });
+
+  it("leaves ordinary names alone", () => {
+    assert.equal(validateReservedName("my-app"), null);
+    assert.equal(validateReservedName("upgrader"), null);
+    assert.equal(validateReservedName("add-ons"), null);
+  });
+
+  // Commander routes `create-rn-app upgrade` to the subcommand, so the create
+  // path only ever sees a reserved name from the interactive prompt - which is
+  // exactly where this gate has to catch it.
+  it("is part of the CLI gate", () => {
+    const errors = collectCliGateErrors({
+      projectName: "healthcheck",
+      bundleIdentifier: "com.company.app",
+    });
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /command name/);
   });
 });
 
