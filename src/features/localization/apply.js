@@ -98,27 +98,6 @@ async function configureLocalization(
     ? `  const remoteConfig = useRemoteConfig();\n\n`
     : "";
 
-  const deepMergeHelper = withRemoteConfig
-    ? `const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-
-const deepMerge = <T extends Record<string, unknown>>(base: T, override: Record<string, unknown>): T => {
-  const out: Record<string, unknown> = { ...base };
-
-  for (const [key, value] of Object.entries(override)) {
-    const baseValue = out[key];
-    if (isPlainObject(baseValue) && isPlainObject(value)) {
-      out[key] = deepMerge(baseValue, value);
-    } else {
-      out[key] = value;
-    }
-  }
-
-  return out as T;
-};
-
-`
-    : "";
-
   const initLocalizationBody = withRemoteConfig
     ? `    if (isInitialized) {
       return;
@@ -205,9 +184,12 @@ const deepMerge = <T extends Record<string, unknown>>(base: T, override: Record<
     ? `import { useLocalizationStore } from "./store";`
     : "";
 
+  const usesDeviceLocale = !useZustand || !withRemoteConfig;
+
   const stateHook = useZustand
-    ? `  const { language, setLanguage } = useLocalizationStore();
-  const { getLocales } = useLocalize();`
+    ? `  const { language, setLanguage } = useLocalizationStore();${
+        withRemoteConfig ? "" : '\n  const { getLocales } = useLocalize();'
+      }`
     : `  const { getLocales } = useLocalize();
   const [language, setLanguageState] = useState<string>(() => {
     return getLocales()[0]?.languageCode || ${JSON.stringify(lang)};
@@ -243,21 +225,23 @@ ${isInitializedState}
 ${stateHook}`;
 
   const useStateImport = useZustand ? "" : `import { useState } from "react";`;
+  const localizeImport = usesDeviceLocale
+    ? 'import { useLocalize } from "react-native-localize";\n'
+    : "";
 
   const providerContent = `import React, { createContext, useContext } from "react";
 ${useStateImport}
 import i18n from "i18next";
 import ICU from "i18next-icu";
 import { initReactI18next, useTranslation } from "react-i18next";
-import { useLocalize } from "react-native-localize";
-import translations from "./languages/${lang}.json";
+${localizeImport}import translations from "./languages/${lang}.json";
 ${storeImport}
 ${remoteConfigImport}import type { I18nContextProps, LocalizationContextProps, TranslationComponents } from "./types";
 import type { ReactNode } from "react";
 
 const LocalizationContext = createContext<LocalizationContextProps | undefined>(undefined);
 
-${deepMergeHelper}const parseWithComponents = (str: string, components: TranslationComponents): ReactNode => {
+const parseWithComponents = (str: string, components: TranslationComponents): ReactNode => {
   const regex = /<(\\w+)>(.*?)<\\/\\1>/gs;
   const parts: ReactNode[] = [];
   let lastIndex = 0;

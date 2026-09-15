@@ -21,6 +21,15 @@ async function copyTemplate({ projectPath }) {
           return false;
         }
 
+        // Whatever a local Gradle/Xcode/IDE run left in template/. Copying it
+        // bloats the new project (android/app/.cxx alone is over a gigabyte)
+        // and xcuserdata carries the template author's account name.
+        const localArtifact =
+          /(^|\/)(\.cxx|\.gradle|\.idea|\.kotlin|xcuserdata|DerivedData)(\/|$)/;
+        if (localArtifact.test(normalizedPath) || normalizedPath.endsWith(".iml")) {
+          return false;
+        }
+
         const buildDirPattern = /\/build(\/|$)/;
         if (buildDirPattern.test(normalizedPath)) {
           return false;

@@ -25,6 +25,7 @@ async function replacePlaceholders({
       "android/app/src/main/AndroidManifest.xml",
       "ios/Podfile",
       "ios/HelloWorld/Info.plist",
+      "ios/HelloWorld/LaunchScreen.storyboard",
       "ios/HelloWorld/AppDelegate.swift",
       "ios/HelloWorld.xcodeproj/project.pbxproj",
       "ios/HelloWorld.xcworkspace/contents.xcworkspacedata",

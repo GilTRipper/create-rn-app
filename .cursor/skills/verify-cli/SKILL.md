@@ -9,6 +9,7 @@ After any `src/`, feature, template, preset, or package change: run tests and fi
 
 1. `npm test` — unit (`tests/unit`).
 2. Touched a feature or generated files: `npm run test:e2e` or a slice (`npm run test:e2e -- maps`). Full e2e if apply order or shared files (`App.tsx`, Podfile, `package.json`) changed.
+2b. Touched apply order, `App.tsx`, or anything a combination of features shares: `npm run test:e2e:scenarios` (minimal / typical / full). Add the invariant to `tests/helpers/expectations.js`, not a one-off assert.
 3. New helper: add `tests/unit/<name>.test.js`. New feature: add/update `tests/e2e/<name>.test.js` via `generateProject` in `tests/helpers/generate.js`. Update suites that cover files you changed (`App.tsx`, Podfile, `package.json`).
 
 Cheap extra smoke is still `createApp` from `src/template.js` with installs skipped. Use `tests/helpers/generate.js` instead of inventing a new wrapper.
@@ -18,5 +19,5 @@ Do not spawn `create-rn-app` and pipe inquirer answers. `--yes` leaves optional 
 ## Do not
 
 - Treat TTY/inquirer logs as a pass.
-- `npm install` / `pod install` in the generated app unless asked.
+- `npm install` / `pod install` in the generated app unless asked. When asked, use the opt-in layers instead of doing it by hand: `npm run test:e2e:deep` (install + `tsc --noEmit` + eslint + Metro bundle) or `npm run test:e2e:max` (adds `pod install` and `gradlew assembleDebug`). They need Node >= 22.11.0 and clean up after themselves; see `tests/README.md`.
 - Leave temp projects behind; `generateProject` + `cleanup` already handle that.

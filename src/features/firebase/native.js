@@ -559,10 +559,10 @@ async function addGoogleServicesToXcodeProject(
       // Find staging target and its config list
       const stagingTargetMatch = content.match(
         new RegExp(
-          `(\\w{24})\\s*/\\*\\s*${targetName.replace(
+          `(?:^|\\n)[\\t ]*(\\w{24})\\s*/\\*\\s*${targetName.replace(
             /[.*+?^${}()|[\]\\]/g,
             "\\$&"
-          )}\\s*\\*/[\\s\\S]*?buildConfigurationList\\s*=\\s*(\\w{24})`,
+          )}\\s*\\*/\\s*=\\s*\\{\\s*isa\\s*=\\s*PBXNativeTarget;[\\s\\S]*?buildConfigurationList\\s*=\\s*(\\w{24})`,
           "m"
         )
       );
@@ -571,10 +571,10 @@ async function addGoogleServicesToXcodeProject(
         // Find config IDs in this config list
         const stagingConfigListBlock = content.match(
           new RegExp(
-            `${stagingConfigListId.replace(
+            `(?:^|\\n)[\\t ]*${stagingConfigListId.replace(
               /[.*+?^${}()|[\]\\]/g,
               "\\$&"
-            )}[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+            )}\\s*/\\*[^\\n]*\\*/\\s*=\\s*\\{[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
             "m"
           )
         );
@@ -584,10 +584,10 @@ async function addGoogleServicesToXcodeProject(
           // Check if these are base config IDs (should be different!)
           const baseConfigListMatch = content.match(
             new RegExp(
-              `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
+              `(?:^|\\n)[\\t ]*(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
                 /[.*+?^${}()|[\]\\]/g,
                 "\\$&"
-              )}"\\s*\\*/[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+              )}"\\s*\\*/\\s*=\\s*\\{[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
               "m"
             )
           );

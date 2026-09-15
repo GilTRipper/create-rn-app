@@ -1,7 +1,5 @@
 import { useMemo } from "react";
-import { PushNotificationService } from "../service";
+import { PushNotificationService } from "~/notifications/service";
 
-export const usePushNotifications = () => {
-  return useMemo(() => new PushNotificationService(), []);
-};
+export const usePushNotifications = () => useMemo(() => new PushNotificationService(), []);
 

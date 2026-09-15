@@ -1,22 +1,24 @@
 import {
   getRemoteConfig,
   setCustomSignals,
-  setDefaults,
-  fetch as fetchConfig,
+  fetchConfig,
   fetchAndActivate,
   getAll,
   getValue,
 } from "@react-native-firebase/remote-config";
 
 import type { Analytics } from "~/lib/analytics/implementation";
-import type { FirebaseRemoteConfigTypes } from "@react-native-firebase/remote-config";
+import type {
+  RemoteConfig as FirebaseRemoteConfig,
+  Value as RemoteConfigValue,
+} from "@react-native-firebase/remote-config";
 
 import type { ReactNativeFirebase } from "@react-native-firebase/app";
 import type { RemoteConfigInterface } from "./interface";
 import type { RemoteConfigOptions } from "./types";
 
 export class RemoteConfig implements RemoteConfigInterface {
-  private config: FirebaseRemoteConfigTypes.Module;
+  private config: FirebaseRemoteConfig;
   private analytics?: Analytics;
 
   public constructor(
@@ -28,10 +30,16 @@ export class RemoteConfig implements RemoteConfigInterface {
     }
 
     this.config = getRemoteConfig(app);
+    // v26 dropped fetch(config, expirationSeconds). A zero minimum fetch
+    // interval is the equivalent of the zero expiration used before.
+    this.config.settings = {
+      ...this.config.settings,
+      minimumFetchIntervalMillis: 0,
+    };
   }
 
   private async fetch() {
-    await fetchConfig(this.config, 0);
+    await fetchConfig(this.config);
     await fetchAndActivate(this.config);
   }
 
@@ -48,10 +56,11 @@ export class RemoteConfig implements RemoteConfigInterface {
     }
   }
 
-  private async setDefaultValue(
+  private setDefaultValue(
     defaults: Record<string, string | number | boolean>
   ) {
-    await setDefaults(this.config, defaults);
+    // v26 exposes defaults as a property; assigning it calls native setDefaults.
+    this.config.defaultConfig = { ...this.config.defaultConfig, ...defaults };
   }
 
   private async prepareAndGetValue(
@@ -59,7 +68,7 @@ export class RemoteConfig implements RemoteConfigInterface {
     options: RemoteConfigOptions = {}
   ) {
     if (options.defaults) {
-      await this.setDefaultValue(options.defaults);
+      this.setDefaultValue(options.defaults);
     }
 
     if (options) {
@@ -101,7 +110,7 @@ export class RemoteConfig implements RemoteConfigInterface {
 
   private async prepareAndGetAll(options: RemoteConfigOptions = {}) {
     if (options.defaults) {
-      await this.setDefaultValue(options.defaults);
+      this.setDefaultValue(options.defaults);
     }
 
     if (options) {
@@ -124,7 +133,7 @@ export class RemoteConfig implements RemoteConfigInterface {
 
     for (const [key, value] of Object.entries(allValues)) {
       try {
-        const configValue = value as FirebaseRemoteConfigTypes.ConfigValue;
+        const configValue = value as RemoteConfigValue;
         const jsonValue = JSON.parse(configValue.asString() || "{}");
         if (
           typeof jsonValue === "object" &&

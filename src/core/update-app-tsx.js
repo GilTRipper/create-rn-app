@@ -54,6 +54,13 @@ async function updateAppTsxForSetup(
     ? 'import { useHandlePushNotificationToken } from "~/notifications";\n'
     : "";
 
+  // Only import what the chosen combination actually renders, otherwise
+  // eslint fails the generated app on no-unused-vars right after scaffolding.
+  const navigationContainerImport = usesNav
+    ? 'import { NavigationContainer } from "@react-navigation/native";\n'
+    : "";
+  const viewImport = usesNav ? "" : 'import { View } from "react-native";\n';
+
   const mapboxImport = mapboxToken !== undefined
     ? `import Mapbox from "@rnmapbox/maps";\n`
     : "";
@@ -65,10 +72,8 @@ async function updateAppTsxForSetup(
 
   if (localizationEnabled && themeEnabled) {
     // Both localization and theme
-    const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
-import { useEffect } from "react";
-import { View } from "react-native";
-import RNBootSplash from "react-native-bootsplash";
+    const appTsxContent = `${mapboxImport}${navigationContainerImport}import { useEffect } from "react";
+${viewImport}import RNBootSplash from "react-native-bootsplash";
 ${mapboxInit}${themeProviderImport}${localizationProviderImport}${notificationsImport}${navigatorImport}
 
 const AppContent = () => {
@@ -107,10 +112,8 @@ export const App = () => (
 
   if (localizationEnabled) {
     // Only localization
-    const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
-import { useEffect } from "react";
-import { View } from "react-native";
-import RNBootSplash from "react-native-bootsplash";
+    const appTsxContent = `${mapboxImport}${navigationContainerImport}import { useEffect } from "react";
+${viewImport}import RNBootSplash from "react-native-bootsplash";
 ${mapboxInit}${localizationProviderImport}${notificationsImport}${navigatorImport}
 
 const AppContent = () => {
@@ -147,10 +150,8 @@ export const App = () => (
 
   if (themeEnabled) {
     // Only theme
-    const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
-import { useEffect } from "react";
-import { View } from "react-native";
-import RNBootSplash from "react-native-bootsplash";
+    const appTsxContent = `${mapboxImport}${navigationContainerImport}import { useEffect } from "react";
+${viewImport}import RNBootSplash from "react-native-bootsplash";
 ${mapboxInit}${themeProviderImport}${notificationsImport}${navigatorImport}
 
 export const App = () => {
@@ -178,10 +179,8 @@ ${contentJsx}
   }
 
   // No localization or theme: just hide splash on mount
-  const appTsxContent = `${mapboxImport}import { NavigationContainer } from "@react-navigation/native";
-import { useEffect } from "react";
-import { View } from "react-native";
-import RNBootSplash from "react-native-bootsplash";
+  const appTsxContent = `${mapboxImport}${navigationContainerImport}import { useEffect } from "react";
+${viewImport}import RNBootSplash from "react-native-bootsplash";
 ${mapboxInit}${notificationsImport}${navigatorImport}
 
 export const App = () => {

@@ -140,11 +140,22 @@ describe("default generated app", () => {
     assert.ok(wrapper.includes("gradle-9.3.1-bin.zip"));
   });
 
+  it("does not write a blank android splash next to the template layer-list", () => {
+    assert.equal(exists(projectPath, "android/app/src/main/res/drawable/splash.png"), false);
+    for (const density of ["hdpi", "mdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
+      assert.equal(
+        exists(projectPath, `android/app/src/main/res/drawable-${density}/splash.png`),
+        false,
+        `drawable-${density}/splash.png would override the layer-list`
+      );
+    }
+  });
+
   it("keeps default splash and launcher icons", () => {
     for (const file of [
       `ios/${projectName}/Images.xcassets/SplashScreen.imageset/SplashScreen.png`,
       `ios/${projectName}/Images.xcassets/SplashScreen.imageset/SplashScreen@2x.png`,
-      "android/app/src/main/res/drawable/splash.png",
+      "android/app/src/main/res/drawable/splash.xml",
       "android/app/src/main/res/mipmap-mdpi/ic_launcher.png",
     ]) {
       assert.ok(exists(projectPath, file), `missing ${file}`);

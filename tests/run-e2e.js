@@ -21,6 +21,31 @@ for (let i = 0; i < args.length; i += 1) {
     process.env.CREATE_RN_TEST_PODS = "1";
     continue;
   }
+  if (arg === "--scenario") {
+    if (args[i + 1]) {
+      process.env.CREATE_RN_TEST_SCENARIO = args[i + 1];
+      i += 1;
+    }
+    continue;
+  }
+  // Deep layers run the generated app's own toolchain, so they are opt-in:
+  // the default run stays fast and works on the Linux CI box.
+  if (arg === "--deep") {
+    process.env.CREATE_RN_TEST_DEEP = "1";
+    continue;
+  }
+  if (arg === "--pod-install") {
+    process.env.CREATE_RN_TEST_POD_INSTALL = "1";
+    continue;
+  }
+  if (arg === "--gradle") {
+    process.env.CREATE_RN_TEST_GRADLE = "1";
+    continue;
+  }
+  if (arg === "--max") {
+    process.env.CREATE_RN_TEST_MAX = "1";
+    continue;
+  }
   if (arg.startsWith("-")) {
     continue;
   }
@@ -50,11 +75,24 @@ if (filters.length > 0 && files.length === 0) {
   process.exit(1);
 }
 
+function runnerTimeout() {
+  if (process.env.CREATE_RN_TEST_MAX === "1" || process.env.CREATE_RN_TEST_GRADLE === "1") {
+    return 60 * 60 * 1000;
+  }
+  if (process.env.CREATE_RN_TEST_POD_INSTALL === "1") {
+    return 45 * 60 * 1000;
+  }
+  if (process.env.CREATE_RN_TEST_DEEP === "1") {
+    return 30 * 60 * 1000;
+  }
+  return 180000;
+}
+
 async function main() {
   let failed = false;
   const stream = run({
     files,
-    timeout: 180000,
+    timeout: runnerTimeout(),
     concurrency: 1,
   });
 

@@ -12,7 +12,10 @@
     "test:all": "npm test && npm run test:e2e",
     "release:patch": "npm version patch && git push --follow-tags",
     "release:minor": "npm version minor && git push --follow-tags",
-    "release:major": "npm version major && git push --follow-tags"
+    "release:major": "npm version major && git push --follow-tags",
+    "test:e2e:scenarios": "node tests/run-e2e.js scenarios",
+    "test:e2e:deep": "node tests/run-e2e.js scenarios --deep",
+    "test:e2e:max": "node tests/run-e2e.js scenarios --max"
   },
   "keywords": [
     "react-native",

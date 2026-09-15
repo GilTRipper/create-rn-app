@@ -158,6 +158,22 @@ function buildEnvConfigFilesBlock(selectedEnvs) {
   return `project.ext.envConfigFiles = [\n${allLines.join("\n")}\n]`;
 }
 
+// Each environment needs a unique applicationId to be a separate app.
+// Production uses the base bundleIdentifier, others get a suffix:
+// staging -> .staging, development -> .dev, local -> .local.
+function androidApplicationId(bundleIdentifier, env) {
+  const lower = String(env).toLowerCase();
+  if (lower === "production") {
+    return bundleIdentifier;
+  }
+  const suffixMap = {
+    staging: "staging",
+    development: "dev",
+    local: "local",
+  };
+  return `${bundleIdentifier}.${suffixMap[lower] || lower}`;
+}
+
 function buildProductFlavorsBlock(selectedEnvs, bundleIdentifier) {
   // Always include production for Android (even if not selected)
   const envsForFlavors = [...selectedEnvs];
@@ -168,24 +184,55 @@ function buildProductFlavorsBlock(selectedEnvs, bundleIdentifier) {
   const flavors = envsForFlavors
     .map(env => {
       const lower = env.toLowerCase();
-      // Each environment needs a unique applicationId to be a separate app
-      // Production uses base bundleIdentifier, others get a suffix
-      let applicationId = bundleIdentifier;
-      if (lower !== "production") {
-        // Use suffix: staging -> .staging, development -> .dev, local -> .local
-        const suffixMap = {
-          staging: "staging",
-          development: "dev",
-          local: "local",
-        };
-        const suffix = suffixMap[lower] || lower;
-        applicationId = `${bundleIdentifier}.${suffix}`;
-      }
+      const applicationId = androidApplicationId(bundleIdentifier, lower);
       return `        ${lower} {\n            minSdkVersion rootProject.ext.minSdkVersion\n            applicationId "${applicationId}"\n            targetSdkVersion rootProject.ext.targetSdkVersion\n            resValue "string", "build_config_package", "${bundleIdentifier}"\n        }`;
     })
     .join("\n");
 
   return `    flavorDimensions "default"\n    productFlavors {\n${flavors}\n    }`;
+}
+
+function flavorNames(selectedEnvs) {
+  const envs = [...selectedEnvs];
+  if (!envs.some(env => env.toLowerCase() === "production")) {
+    envs.push("production");
+  }
+  return envs.map(env => env.toLowerCase());
+}
+
+// The React Native gradle plugin only skips JS bundling for the variants listed
+// in debuggableVariants, and its default is plain "debug"/"debugOptimized".
+// Once flavors exist, <flavor>Debug is not in that list, so a debug build tries
+// to bundle and compile with Hermes and dies on "Couldn't determine Hermesc
+// location". The template's own react {} comment says to list them.
+function buildDebuggableVariantsLine(selectedEnvs) {
+  const variants = flavorNames(selectedEnvs).flatMap(flavor => [
+    `"${flavor}Debug"`,
+    `"${flavor}DebugOptimized"`,
+  ]);
+  return `    debuggableVariants = [${variants.join(", ")}]`;
+}
+
+function applyDebuggableVariants(content, selectedEnvs) {
+  const line = buildDebuggableVariantsLine(selectedEnvs);
+
+  // An already active setting (not the commented-out example) is replaced.
+  const activeSetting = /^[ \t]*debuggableVariants\s*=\s*\[[^\]]*\]/m;
+  if (activeSetting.test(content)) {
+    return content.replace(activeSetting, line);
+  }
+
+  const reactBlock = /^(react\s*\{)/m;
+  if (!reactBlock.test(content)) {
+    console.log(
+      chalk.yellow(
+        "⚠️  Could not find the react {} block in build.gradle; debuggableVariants not set"
+      )
+    );
+    return content;
+  }
+
+  return content.replace(reactBlock, `$1\n${line}`);
 }
 
 async function updateAndroidBuildGradle(
@@ -269,6 +316,9 @@ async function updateAndroidBuildGradle(
     }
   }
 
+  // Flavored debug builds must stay debuggable, otherwise gradle bundles JS
+  content = applyDebuggableVariants(content, selectedEnvs);
+
   // Add matchingFallbacks to buildTypes (required for productFlavors)
   // This ensures that debug/release build types can work with all flavors
   const buildTypesRegex =
@@ -306,7 +356,9 @@ async function updateAndroidBuildGradle(
 module.exports = {
   ensureManifestPackage,
   copyAndroidEnvSources,
+  androidApplicationId,
   buildEnvConfigFilesBlock,
   buildProductFlavorsBlock,
+  buildDebuggableVariantsLine,
   updateAndroidBuildGradle,
 };

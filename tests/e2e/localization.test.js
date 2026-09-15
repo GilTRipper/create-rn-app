@@ -111,7 +111,8 @@ describe("localization with Remote Config", () => {
     assert.ok(provider.includes('import { useRemoteConfig } from "~/lib/remote-config"'));
     assert.ok(provider.includes("useRemoteConfig()"));
     assert.ok(provider.includes("getAllJSON"));
-    assert.ok(provider.includes("deepMerge"));
+    assert.ok(provider.includes("addResourceBundle"));
+    assert.ok(!provider.includes("deepMerge"), "unused merge helper must not be emitted");
     assert.ok(provider.includes("fallbackLng: false"));
     assert.ok(provider.includes("i18n.options.fallbackLng = false"));
     assert.ok(provider.includes("using local file as fallback"));

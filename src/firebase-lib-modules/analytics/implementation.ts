@@ -1,11 +1,11 @@
 import { getAnalytics } from "@react-native-firebase/analytics";
 import { AnalyticsEvents, type AnalyticsEvent } from "./types";
-import type { FirebaseAnalyticsTypes } from "@react-native-firebase/analytics";
+import type { Analytics as FirebaseAnalytics } from "@react-native-firebase/analytics";
 import type { ReactNativeFirebase } from "@react-native-firebase/app";
 import type { AnalyticsInterface } from "./interface";
 
 export class Analytics implements AnalyticsInterface {
-  private analytics: FirebaseAnalyticsTypes.Module;
+  private analytics: FirebaseAnalytics;
 
   public constructor(app: ReactNativeFirebase.FirebaseApp) {
     this.analytics = getAnalytics(app);

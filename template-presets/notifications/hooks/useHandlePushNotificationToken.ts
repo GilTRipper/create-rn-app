@@ -9,10 +9,14 @@ export const useHandlePushNotificationToken = () => {
     try {
       await notifications.requestPermission();
       const granted = await notifications.checkPermission();
-      if (!granted) return;
+      if (!granted) {
+        return;
+      }
 
       const token = await notifications.getPushToken();
-      if (!token) return;
+      if (!token) {
+        return;
+      }
 
       setPushToken(token);
       console.info("[RECEIVED PUSH TOKEN]:", { token });

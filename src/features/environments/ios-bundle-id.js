@@ -27,10 +27,10 @@ async function updateBaseTargetBundleId({
             // Find staging config list
             const stagingConfigListMatch = content.match(
               new RegExp(
-                `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
+                `(?:^|\\n)[\\t ]*(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${targetName.replace(
                   /[.*+?^${}()|[\]\\]/g,
                   "\\$&"
-                )}"\\s*\\*/[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+                )}"\\s*\\*/\\s*=\\s*\\{[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
                 "m"
               )
             );
@@ -43,10 +43,10 @@ async function updateBaseTargetBundleId({
               // Check base config IDs
               const baseConfigListMatch = content.match(
                 new RegExp(
-                  `(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
+                  `(?:^|\\n)[\\t ]*(\\w{24})\\s*/\\*\\s*Build configuration list for PBXNativeTarget "${projectName.replace(
                     /[.*+?^${}()|[\]\\]/g,
                     "\\$&"
-                  )}"\\s*\\*/[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+                  )}"\\s*\\*/\\s*=\\s*\\{[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
                   "m"
                 )
               );

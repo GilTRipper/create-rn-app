@@ -92,25 +92,11 @@ async function copySplashScreenImages(
         await fs.writeFile(path.join(iosSplashPath, file), placeholderBuffer);
       }
 
-      // Android blank assets (all densities + base)
-      const androidResPath = path.join(projectPath, "android/app/src/main/res");
-      const androidTargets = [
-        "drawable",
-        "drawable-hdpi",
-        "drawable-mdpi",
-        "drawable-xhdpi",
-        "drawable-xxhdpi",
-        "drawable-xxxhdpi",
-      ];
-      for (const dir of androidTargets) {
-        const densityPath = path.join(androidResPath, dir);
-        await fs.ensureDir(densityPath);
-        await fs.writeFile(
-          path.join(densityPath, "splash.png"),
-          placeholderBuffer
-        );
-      }
-
+      // No Android placeholders on purpose. The template already ships
+      // res/drawable/splash.xml, the layer-list BootTheme uses as
+      // windowBackground. Writing splash.png next to it makes two resources
+      // named "splash" in one bucket, which fails mergeResources; writing it
+      // into the density buckets would override the layer-list with a blank.
       spinner.succeed("Using blank default splash screens");
       // Update storyboard even for blank placeholders
       await updateBootSplashStoryboard(projectPath, projectName);

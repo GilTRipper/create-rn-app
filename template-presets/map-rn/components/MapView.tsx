@@ -8,22 +8,26 @@ type MapViewProps = {
   renderBottomContent?: () => React.ReactNode;
 } & NativeMapViewProps;
 
-export const MapView = React.forwardRef<NativeMapView, PropsWithChildren<MapViewProps>>(
-  ({ renderBottomContent, children, ...props }, ref: ForwardedRef<NativeMapView>) => {
-    return (
-      <>
-        <NativeMapView
-          provider={PROVIDER_GOOGLE}
-          ref={ref}
-          style={styles.map}
-          {...props}
-        >
-          {children}
-        </NativeMapView>
-        {renderBottomContent?.()}
-      </>
-    );
-  },
+export const MapView = React.forwardRef<
+  NativeMapView,
+  PropsWithChildren<MapViewProps>
+>(
+  (
+    { renderBottomContent, children, ...props },
+    ref: ForwardedRef<NativeMapView>,
+  ) => (
+    <>
+      <NativeMapView
+        provider={PROVIDER_GOOGLE}
+        ref={ref}
+        style={styles.map}
+        {...props}
+      >
+        {children}
+      </NativeMapView>
+      {renderBottomContent?.()}
+    </>
+  ),
 );
 
 const styles = StyleSheet.create({

@@ -2,6 +2,8 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { createApp } = require("../../src/template");
+const { track, untrack } = require("./cleanup-registry");
+const { androidApplicationId } = require("../../src/features/environments/android");
 
 function packageManager() {
   const args = process.argv;
@@ -53,9 +55,34 @@ function cleanup(targetPath) {
   if (targetPath && fs.existsSync(targetPath)) {
     fs.rmSync(targetPath, { recursive: true, force: true });
   }
+  untrack(targetPath);
 }
 
-async function generateProject(name, overrides = {}) {
+// createApp reports through console.*; ora only draws spinners on stderr.
+// Patching the console methods keeps the node:test reporter, which writes
+// straight to stdout, out of the captured buffer.
+const CONSOLE_METHODS = ["log", "error", "warn", "info"];
+
+async function captureOutput(run) {
+  const chunks = [];
+  const originals = CONSOLE_METHODS.map(method => console[method]);
+
+  CONSOLE_METHODS.forEach(method => {
+    console[method] = (...args) => {
+      chunks.push(args.map(arg => String(arg)).join(" "));
+    };
+  });
+
+  try {
+    return { result: await run(), output: chunks.join("\n") };
+  } finally {
+    CONSOLE_METHODS.forEach((method, index) => {
+      console[method] = originals[index];
+    });
+  }
+}
+
+async function generateProject(name, overrides = {}, options = {}) {
   const projectName = uniqueName(name);
   const projectPath = path.join(os.tmpdir(), projectName);
   cleanup(projectPath);
@@ -92,8 +119,15 @@ async function generateProject(name, overrides = {}) {
     },
   };
 
-  await createApp(config);
-  return { projectName, projectPath, config };
+  track(projectPath);
+
+  if (!options.capture) {
+    await createApp(config);
+    return { projectName, projectPath, config, output: null };
+  }
+
+  const { output } = await captureOutput(() => createApp(config));
+  return { projectName, projectPath, config, output };
 }
 
 const PNG_STUB = Buffer.from(
@@ -118,6 +152,7 @@ function writeDummyTtf(filePath) {
 function prepareSplashDir() {
   const dir = path.join(os.tmpdir(), uniqueName("e2e-splash-assets"));
   cleanup(dir);
+  track(dir);
   const iosDir = path.join(dir, "ios");
   const androidDir = path.join(dir, "android");
   fs.mkdirSync(iosDir, { recursive: true });
@@ -143,6 +178,7 @@ function prepareSplashDir() {
 function prepareIconsDir() {
   const dir = path.join(os.tmpdir(), uniqueName("e2e-icon-assets"));
   cleanup(dir);
+  track(dir);
 
   for (const density of [
     "mipmap-hdpi",
@@ -180,6 +216,7 @@ function prepareIconsDir() {
 function prepareFontsDir() {
   const dir = path.join(os.tmpdir(), uniqueName("e2e-fonts-assets"));
   cleanup(dir);
+  track(dir);
   fs.mkdirSync(dir, { recursive: true });
   writeDummyTtf(path.join(dir, "TestFont-Regular.ttf"));
   writeDummyTtf(path.join(dir, "TestFont-Bold.ttf"));
@@ -187,7 +224,35 @@ function prepareFontsDir() {
   return dir;
 }
 
-function writeDummyFirebaseFiles(dirPath) {
+// The Google Services gradle plugin validates this file for real, so the
+// stub needs project_number and a client whose package_name matches the
+// applicationId of the flavor it is placed in. Without both, an Android build
+// fails at processGoogleServices.
+function googleServicesJson(packageNames) {
+  return JSON.stringify(
+    {
+      project_info: {
+        project_number: "123456789000",
+        project_id: "test-project",
+        storage_bucket: "test-project.appspot.com",
+      },
+      client: packageNames.map((packageName, index) => ({
+        client_info: {
+          mobilesdk_app_id: `1:123456789000:android:${String(index).padStart(16, "a")}`,
+          android_client_info: { package_name: packageName },
+        },
+        oauth_client: [],
+        api_key: [{ current_key: "AIzaSyTestKeyForE2eGeneratedProjects00000" }],
+        services: { appinvite_service: { other_platform_oauth_client: [] } },
+      })),
+      configuration_version: "1",
+    },
+    null,
+    2
+  );
+}
+
+function writeDummyFirebaseFiles(dirPath, packageNames = ["com.test.app"]) {
   fs.mkdirSync(dirPath, { recursive: true });
   fs.writeFileSync(
     path.join(dirPath, "GoogleService-Info.plist"),
@@ -196,27 +261,31 @@ function writeDummyFirebaseFiles(dirPath) {
 <plist version="1.0">
 <dict>
   <key>BUNDLE_ID</key>
-  <string>com.test.app</string>
+  <string>${packageNames[0]}</string>
   <key>GOOGLE_APP_ID</key>
   <string>1:123456789:ios:abcdef</string>
+  <key>PROJECT_ID</key>
+  <string>test-project</string>
+  <key>GCM_SENDER_ID</key>
+  <string>123456789000</string>
 </dict>
 </plist>`
   );
   fs.writeFileSync(
     path.join(dirPath, "google-services.json"),
-    JSON.stringify({
-      project_info: { project_id: "test-project" },
-      client: [],
-      configuration_version: "1",
-    })
+    googleServicesJson(packageNames)
   );
 }
 
-function firebaseFilesByEnv(baseDir, envs) {
+// bundleIdentifier is optional: only builds need the package names to line up.
+function firebaseFilesByEnv(baseDir, envs, bundleIdentifier) {
   const filesByEnv = {};
   for (const env of envs) {
     const envDir = path.join(baseDir, env.toLowerCase());
-    writeDummyFirebaseFiles(envDir);
+    const packageNames = bundleIdentifier
+      ? [androidApplicationId(bundleIdentifier, env)]
+      : undefined;
+    writeDummyFirebaseFiles(envDir, packageNames);
     filesByEnv[env] = {
       iosPlist: path.join(envDir, "GoogleService-Info.plist"),
       androidJson: path.join(envDir, "google-services.json"),
@@ -231,6 +300,7 @@ module.exports = {
   uniqueName,
   disabledFeatureDefaults,
   cleanup,
+  captureOutput,
   generateProject,
   prepareSplashDir,
   prepareIconsDir,

@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandStorage } from "~/lib/storage";
-import type { ThemeState } from "../types";
+import type { ThemeState } from "~/lib/theme/types";
 
 export const useThemeStore = create<ThemeState>()(
   persist(

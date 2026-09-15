@@ -1633,13 +1633,16 @@ async function createIosTargetsForEnvs(
       const expectedConfigListId = stagingConfigListIds[targetName];
       const expectedConfigIds = stagingConfigIds[targetName];
 
-      // Find config list in content after replacement
+      // Find config list in content after replacement. The id also appears as
+      // `buildConfigurationList = <id> /* ... */;` inside the target, so the
+      // `= {` is what pins this to the definition instead of the reference;
+      // without it the match ran on to the base target's configurations.
       const configListMatch = content.match(
         new RegExp(
-          `${expectedConfigListId.replace(
+          `(?:^|\\n)[\\t ]*${expectedConfigListId.replace(
             /[.*+?^${}()|[\]\\]/g,
             "\\$&"
-          )}[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
+          )}\\s*/\\*[^\\n]*\\*/\\s*=\\s*\\{[\\s\\S]*?buildConfigurations\\s*=\\s*\\(([\\s\\S]*?)\\);`,
           "m"
         )
       );
