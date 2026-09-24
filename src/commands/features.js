@@ -1,10 +1,10 @@
 const chalk = require("chalk");
 const { groupFeatures } = require("../features/registry");
-const { loadProject } = require("./load-project");
+const { loadProject, commandHint } = require("./load-project");
 
 const ID_WIDTH = 14;
 
-function printFeature(marker, color, feature) {
+function printFeature(marker, color, feature, hint = null) {
   console.log(
     `  ${color(marker)} ${chalk.bold(feature.id.padEnd(ID_WIDTH))}${chalk.gray(
       feature.description
@@ -13,15 +13,18 @@ function printFeature(marker, color, feature) {
   if (feature.unavailableReason) {
     console.log(`    ${" ".repeat(ID_WIDTH)}${chalk.dim(feature.unavailableReason)}`);
   }
+  if (hint) {
+    console.log(`    ${" ".repeat(ID_WIDTH)}${chalk.cyan(`→ ${hint}`)}`);
+  }
 }
 
-function printSection(title, marker, color, features) {
+function printSection(title, marker, color, features, hintFor = null) {
   if (features.length === 0) {
     return;
   }
   console.log(chalk.bold.cyan(`\n${title}`));
   for (const feature of features) {
-    printFeature(marker, color, feature);
+    printFeature(marker, color, feature, hintFor ? hintFor(feature) : null);
   }
 }
 
@@ -46,13 +49,20 @@ async function featuresCommand(options = {}) {
       ]) {
         printFeature(" ", chalk.gray, feature);
       }
+      console.log(
+        chalk.cyan(
+          `\n  If this is an existing React Native app, run \`${commandHint("adopt", options)}\` to start tracking it.`
+        )
+      );
       console.log("");
       return;
     }
 
     console.log(chalk.gray(`   ${manifest.config.projectName}`));
     printSection("Installed", "✓", chalk.green, grouped.installed);
-    printSection("Can be added", "+", chalk.yellow, grouped.addable);
+    printSection("Can be added", "+", chalk.yellow, grouped.addable, feature =>
+      commandHint(`add ${feature.id}`, options)
+    );
     printSection(
       "Not available for an existing project",
       "−",

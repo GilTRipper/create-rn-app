@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Project manifest** `.create-rn-app.json`: generated projects record the CLI version, React Native version, the chosen configuration and hashes of the template output. Commit it — the commands below rely on it. Secrets (API keys, tokens, Google config paths) are never written to it.
+- **`create-rn-app features`**: lists optional features and, inside a project, which are installed, which can be added and which cannot (with the reason).
+- **`create-rn-app healthcheck`**: shows versions, installed features and which template files were changed, deleted or added by the team.
+- **`create-rn-app adopt`**: writes a manifest for a project created before manifests existed. Detects the CLI version and configuration from the project, asks when it cannot tell (`--from <version>` to say it yourself), `--force` to redo it.
+- **`create-rn-app add <feature>`**: adds `storage`, `theme`, `navigation`, `localization`, `maps`, `firebase` or `assets` to an existing project. Only the feature's own changes are applied; files the team edited are merged 3-way, and real conflicts are asked about (or left as conflict markers with `-y`). `assets` takes `--fonts-dir`, `--splash-dir`, `--app-icon-dir`. `--dry-run` shows the plan.
+- **`create-rn-app upgrade`**: moves a project to the current template. Untouched files are updated, edited files are merged 3-way against the template the project was created from, the team's own files are left alone, and removed template files are reported, never deleted. Dependencies are merged per package; versions the team pinned are kept. `--dry-run` shows the plan.
+- `add`, `adopt` and `upgrade` need a git repository with a clean working tree, so every change can be undone with `git checkout -- . && git clean -fd`.
+- **App icons per environment**: the icon directory can hold one subfolder per environment (`development/`, `staging/`, …) next to a shared set; an environment without its own folder gets the shared icons.
 - Optional **UI kit** from `ui-templates/`. Interactive prompt copies `All` or selected components into `src/ui/components/` and injects only their npm dependencies. Current components: **TurboImage** (`react-native-turbo-image`) and **LiquidGlassView** / **AnimatedLiquidGlassView** (`@callstack/liquid-glass`, Xcode 26+ for the iOS glass effect).
 - E2E coverage for Node `>= 22.11.0`, RN 0.86 tooling pins, environments without Firebase (no SPM opt-out / Firebase pods), and environments with Firebase (DisableSPM, Remote Config pods, per-env Google files). Firebase + skipped Maps keeps `FirebaseApp.configure()` in AppDelegate.
 - Default Android `@drawable/splash` so BootTheme links without a generated bootsplash asset.
@@ -30,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`@d11/react-native-fast-image`** — image loading is `TurboImage` (`react-native-turbo-image`). The AndroidSVG duplicate-class exclude is no longer needed.
 
 ### Fixed
+- **App.tsx with theme and no localization** crashed on start with `Text strings must be rendered within a <Text> component`: the `return (` statement was inserted inside `<ThemeProvider>` as text. Affected every navigation mode with `theme` on and localization off.
+- **Project names in PascalCase** (`MyApp`, the prompt's own default) were rejected by the name check.
+- **Android environments**: custom app icon and splash screen reached only the production build; development and staging flavors kept the stock React Native icon. The shared set is now copied into every flavor that did not bring its own.
+- Local leftovers `android/local.properties` and `ios/.xcode.env.local` are no longer copied from the template directory into new projects.
 - **Mapbox / App.tsx**: `Mapbox.setAccessToken` is written on generate (real token or `<MAPBOX_ACCESS_TOKEN>`). The helper existed but was never called; the insert also skipped `import …;` lines.
 - **Mapbox / iOS**: `$RNMapboxMaps.pre_install` is injected before `post_install` on the current RN Podfile (the old regex required an `end` immediately above `post_install` and never matched).
 - **Mapbox / Android**: Mapbox Maven (`api.mapbox.com/downloads/v2/releases/maven`) is appended when the RN 0.86 template has no `allprojects` block.
@@ -38,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 - After upgrading an existing generated app: `pnpm install`, then `cd ios && pod install` (or `pnpm run clean:ios` + fresh install).
 - Liquid Glass is opt-in via the UI kit prompt and needs Xcode 26 to compile; below iOS 26 the library renders a normal View.
+- Projects created before this version have no manifest: run `create-rn-app adopt` once before `add` or `upgrade`.
+- **Known limitations of `upgrade`**:
+  - Xcode project files (`project.pbxproj`, `.xcscheme`) are not changed. When the template changed them, `upgrade` lists them so you can compare by hand.
+  - Patches in `patches/` pinned through `pnpm.patchedDependencies` are not replaced when the patched package is bumped.
+- `environments` cannot be added to an existing project: it creates targets inside the Xcode project.
+- Splash screens stay shared across environments.
 
 ## [1.1.6] - 2026-05-28
 

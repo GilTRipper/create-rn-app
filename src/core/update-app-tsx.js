@@ -37,6 +37,11 @@ async function updateAppTsxForSetup(
       ? 'import { AppNavigator } from "~/ui/navigation";'
       : "";
 
+  // A complete `return` statement, so it can only ever be a function body.
+  // Inlining it inside JSX turns "return (" into a text child, which React
+  // Native rejects at runtime with "Text strings must be rendered within a
+  // <Text> component" - the provider branches below each wrap an inner
+  // AppContent component instead.
   const contentJsx = usesNav
     ? navigationMode === "with-auth"
       ? `  return (\n    <NavigationContainer>\n      <RootNavigator />\n    </NavigationContainer>\n  );`
@@ -154,7 +159,7 @@ export const App = () => (
 ${viewImport}import RNBootSplash from "react-native-bootsplash";
 ${mapboxInit}${themeProviderImport}${notificationsImport}${navigatorImport}
 
-export const App = () => {
+const AppContent = () => {
   ${
     messagingEnabled
       ? "  const { setNotifications } = useHandlePushNotificationToken();\n"
@@ -165,12 +170,14 @@ export const App = () => {
     RNBootSplash.hide();
   }, []);
 
-  return (
-    <ThemeProvider>
 ${contentJsx}
-    </ThemeProvider>
-  );
 };
+
+export const App = () => (
+  <ThemeProvider>
+    <AppContent />
+  </ThemeProvider>
+);
 `;
 
     await fs.writeFile(appTsxPath, appTsxContent, "utf8");

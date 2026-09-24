@@ -2,6 +2,7 @@ const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 const { generateProject, cleanup, prepareFontsDir } = require("../helpers/generate");
 const { exists, readText, readJson } = require("../helpers/fs");
 const {
@@ -81,6 +82,53 @@ describe("manifest: default project", () => {
     const { files } = await readManifest(projectPath);
     const actual = await hashProjectFiles(projectPath);
     assert.deepEqual(files, actual);
+  });
+
+  // Anything the project gitignores is machine-specific or regenerated, so its
+  // hash would report a teammate's fresh clone as modified. This guards the
+  // whole class rather than the two files that already caught us out.
+  it("never hashes a file the project gitignores", async () => {
+    execFileSync("git", ["init", "-q"], { cwd: projectPath });
+    try {
+      const { files } = await readManifest(projectPath);
+      const ignored = execFileSync("git", ["check-ignore", "--stdin"], {
+        cwd: projectPath,
+        input: Object.keys(files).join("\n"),
+        encoding: "utf8",
+        // check-ignore exits 1 when nothing matches, which is the good case.
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim();
+      assert.equal(ignored, "", `gitignored files were hashed:\n${ignored}`);
+    } catch (error) {
+      assert.equal(error.status, 1, error.message);
+    } finally {
+      fs.rmSync(path.join(projectPath, ".git"), { recursive: true, force: true });
+    }
+  });
+
+  // An Android Studio or Xcode run leaves local.properties and .xcode.env.local
+  // in template/, each pinning an absolute path on that machine. They are
+  // untracked and unpublished, so a fresh clone has neither and this passes
+  // vacuously there - it guards generation from a working copy that has them.
+  it("never copies machine-local leftovers out of the template", () => {
+    assert.equal(
+      exists(projectPath, "android/local.properties"),
+      false,
+      "copied the template author's Android SDK path"
+    );
+
+    const templateXcodeEnv = path.join(
+      __dirname,
+      "../../template/ios/.xcode.env.local"
+    );
+    const projectXcodeEnv = path.join(projectPath, "ios/.xcode.env.local");
+    if (fs.existsSync(templateXcodeEnv) && fs.existsSync(projectXcodeEnv)) {
+      assert.notEqual(
+        fs.readFileSync(projectXcodeEnv, "utf8"),
+        fs.readFileSync(templateXcodeEnv, "utf8"),
+        "shipped the template author's node path instead of generating one"
+      );
+    }
   });
 
   it("is committed rather than ignored by the generated .gitignore", () => {

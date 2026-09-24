@@ -326,6 +326,20 @@ The tool will automatically copy all icons to the correct locations:
 - **Android**: Icons are copied to `android/app/src/main/res/mipmap-*/` for all density folders
 - **iOS**: All PNG files and `Contents.json` are copied to `ios/{projectName}/Images.xcassets/AppIcon.appiconset/`
 
+**Icons per environment:** when the project has environments, put one subfolder per environment next to the shared set. Folder names are matched case-insensitively; an environment without its own folder gets the shared icons.
+```
+AppIcons/
+  ├── android/              # shared set
+  ├── Assets.xcassets/
+  ├── development/
+  │   ├── android/
+  │   └── Assets.xcassets/
+  └── staging/
+      └── ...
+```
+- **Android**: per-environment icons go to `android/app/src/<flavor>/res/`
+- **iOS**: each environment gets its own `AppIcon<Env>.appiconset`, set as the app icon of that environment's target
+
 **CLI option:** `--app-icon-dir <path>` - Specify app icon directory path directly
 
 ### Installation Options
@@ -442,6 +456,80 @@ npx @giltripper/create-rn-app MyApp \
 ```
 
 When using `--yes`, all prompts are automatically answered with default values, and you can provide all configuration via CLI flags.
+
+## Managing Existing Projects
+
+Every generated project gets a `.create-rn-app.json` manifest in its root: the CLI version, the React Native version, the chosen configuration and hashes of the template files. **Commit it** — the commands below read it. It never contains API keys or tokens.
+
+All commands work in the current directory, or in another one with `--path <path>`.
+
+| Command | What it does |
+|---|---|
+| `create-rn-app features` | Lists optional features: installed, can be added, not available |
+| `create-rn-app healthcheck` | Versions, installed features, template files you changed or deleted |
+| `create-rn-app adopt` | Writes a manifest for a project created before manifests existed |
+| `create-rn-app add <feature>` | Adds a feature to an existing project |
+| `create-rn-app upgrade` | Moves the project to the current template |
+
+`add`, `adopt` and `upgrade` need a git repository with a clean working tree, so any change can be undone:
+
+```bash
+git checkout -- . && git clean -fd
+```
+
+### Older projects: `adopt`
+
+Projects created before the manifest existed need it once, before `add` or `upgrade`:
+
+```bash
+npx @giltripper/create-rn-app adopt
+```
+
+It detects the CLI version and the configuration from the project and shows what it found and where, so you can correct it. When two versions look the same, it asks instead of guessing.
+
+- `--from <version>` — the CLI version that created the project, if you know it
+- `-y, --yes` — accept what was detected
+- `--force` — replace an existing manifest
+
+### Adding a feature: `add`
+
+```bash
+npx @giltripper/create-rn-app add theme --dry-run   # show the plan
+npx @giltripper/create-rn-app add theme
+```
+
+Available: `storage`, `theme`, `navigation`, `localization`, `maps`, `firebase`, `assets`. `environments` cannot be added later — it creates targets inside the Xcode project.
+
+Only the feature's own changes are applied. A file you edited (for example `App.tsx`) is merged with the feature's version; when both touched the same lines, you choose, or with `-y` conflict markers are written into the file.
+
+`assets` takes its sources as flags and can be run more than once:
+
+```bash
+npx @giltripper/create-rn-app add assets --fonts-dir ./fonts --app-icon-dir ./AppIcons
+```
+
+After `add firebase`, add your own `google-services.json` and `GoogleService-Info.plist` — Firebase will not start without them.
+
+### Updating the template: `upgrade`
+
+```bash
+npx @giltripper/create-rn-app upgrade --dry-run   # show the plan
+npx @giltripper/create-rn-app upgrade
+```
+
+For each template file:
+- you did not touch it → updated
+- you edited it and the template changed it → merged; conflicts are asked about, or left as markers with `-y`
+- you own it (not from the template) → left alone
+- the template removed it → reported, never deleted
+
+Dependencies in `package.json` are merged per package; versions you pinned yourself are kept. To merge edited files, `upgrade` downloads the CLI version that created the project from npm (cached afterwards), so it needs network access — always for an adopted project, otherwise only when there is something to merge.
+
+**Not updated automatically:**
+- Xcode project files (`project.pbxproj`, `.xcscheme`) contain ids unique to your project. When the template changed them, `upgrade` lists them — compare by hand.
+- Patches in `patches/` pinned via `pnpm.patchedDependencies` are not replaced when the patched package is bumped.
+
+After `add` or `upgrade`, install dependencies and pods as usual.
 
 ## Contributing
 

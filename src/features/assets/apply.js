@@ -8,9 +8,15 @@ async function copyProjectFonts(ctx) {
 }
 
 async function copySplashAndIcons(ctx) {
-  const { splashScreenDir, appIconDir, projectPath, projectName } = ctx.config;
+  const {
+    splashScreenDir,
+    appIconDir,
+    projectPath,
+    projectName,
+    envSetupSelectedEnvs = [],
+  } = ctx.config;
   await copySplashScreenImages(splashScreenDir, projectPath, projectName);
-  await copyAppIcons(appIconDir, projectPath, projectName);
+  await copyAppIcons(appIconDir, projectPath, projectName, envSetupSelectedEnvs);
 }
 
 module.exports = { copyProjectFonts, copySplashAndIcons };

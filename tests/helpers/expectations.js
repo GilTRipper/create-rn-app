@@ -400,6 +400,28 @@ function checkAppTsx({ projectPath, config }) {
     );
   }
   assert.equal((app.match(/export const App = /g) || []).length, 1, "App must be exported exactly once");
+
+  // `contentJsx` in update-app-tsx.js is a whole `return` statement, so it is
+  // only ever valid as a function body. Inlined inside a provider it becomes
+  // JSX text: the file still compiles and lint still passes, but React Native
+  // throws "Text strings must be rendered within a <Text> component" the
+  // moment the app starts. Counting return statements catches that class,
+  // and unlike a parser it needs no toolchain to be installed.
+  // Only meaningful when the generator actually rewrote the file: with no
+  // navigation and no providers it keeps the template demo App.tsx, which has
+  // plenty of returns of its own.
+  const rewritten =
+    config.navigationMode !== "none" ||
+    config.theme ||
+    (config.localization && config.localization.enabled) ||
+    messaging;
+  if (rewritten) {
+    const returnStatements = (app.match(/^\s*return[\s(]/gm) || []).length;
+    assert.ok(
+      returnStatements <= 1,
+      `App.tsx has ${returnStatements} return statements; a provider is wrapping one instead of an inner component`
+    );
+  }
 }
 
 const CHECKS = [

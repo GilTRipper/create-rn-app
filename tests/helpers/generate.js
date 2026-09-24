@@ -213,6 +213,25 @@ function prepareIconsDir() {
   return dir;
 }
 
+// The multi-environment layout: a shared set at the root, plus one folder per
+// environment that wants its own icons.
+function prepareIconsDirWithEnvs(envs = [], extras = []) {
+  const dir = prepareIconsDir();
+  for (const name of [...envs, ...extras]) {
+    const target = path.join(dir, name);
+    fs.mkdirSync(target, { recursive: true });
+    fs.cpSync(path.join(dir, "android"), path.join(target, "android"), {
+      recursive: true,
+    });
+    fs.cpSync(
+      path.join(dir, "Assets.xcassets"),
+      path.join(target, "Assets.xcassets"),
+      { recursive: true }
+    );
+  }
+  return dir;
+}
+
 function prepareFontsDir() {
   const dir = path.join(os.tmpdir(), uniqueName("e2e-fonts-assets"));
   cleanup(dir);
@@ -304,6 +323,7 @@ module.exports = {
   generateProject,
   prepareSplashDir,
   prepareIconsDir,
+  prepareIconsDirWithEnvs,
   prepareFontsDir,
   writeDummyFirebaseFiles,
   firebaseFilesByEnv,

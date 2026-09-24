@@ -1,5 +1,5 @@
 const chalk = require("chalk");
-const { compareWithManifest } = require("../manifest");
+const { compareWithManifest, isAdopted } = require("../manifest");
 const { groupFeatures } = require("../features/registry");
 const { compareVersions } = require("../shared/version");
 const { loadProject, reportMissingManifest } = require("./load-project");
@@ -18,7 +18,12 @@ function printVersions(manifest) {
       `(${manifest.config.bundleIdentifier})`
     )}`
   );
-  printRow("Created with", `create-rn-app ${manifest.cliVersion}`);
+  printRow(
+    "Created with",
+    `create-rn-app ${manifest.cliVersion}${
+      isAdopted(manifest) ? chalk.gray(" (detected by adopt)") : ""
+    }`
+  );
 
   const drift = compareVersions(cliPackageJson.version, manifest.cliVersion);
   if (drift > 0) {
@@ -110,7 +115,7 @@ async function healthcheckCommand(options = {}) {
     const { projectPath, manifest } = await loadProject(options);
 
     if (!manifest) {
-      reportMissingManifest(projectPath);
+      reportMissingManifest(projectPath, options);
       process.exitCode = 1;
       return;
     }
@@ -118,7 +123,24 @@ async function healthcheckCommand(options = {}) {
     console.log(chalk.cyan.bold("\n🩺 Healthcheck\n"));
     printVersions(manifest);
     printFeatures(manifest.config);
-    printFiles(await compareWithManifest(projectPath, manifest));
+
+    // An adopted project has no baseline to compare against, so there is
+    // nothing truthful to say about which files changed.
+    if (isAdopted(manifest)) {
+      console.log(chalk.bold.cyan("\n  Template files"));
+      console.log(
+        chalk.gray(
+          "    No baseline recorded - this project was adopted, not generated."
+        )
+      );
+      console.log(
+        chalk.gray(
+          "    The first upgrade rebuilds one from a snapshot of the detected version."
+        )
+      );
+    } else {
+      printFiles(await compareWithManifest(projectPath, manifest));
+    }
     console.log("");
   } catch (error) {
     console.error(chalk.red(`\n❌ ${error.message}\n`));

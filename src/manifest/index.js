@@ -8,7 +8,12 @@ const { sanitizeConfig } = require("./sanitize");
 const { shouldHashFile, hashFile, hashProjectFiles } = require("./hash");
 const { hasManifest, readManifest } = require("./read");
 const { compareHashes, compareWithManifest } = require("./compare");
-const { buildManifest, writeManifest } = require("./write");
+const {
+  buildManifest,
+  writeManifest,
+  writeAdoptedManifest,
+  isAdopted,
+} = require("./write");
 
 module.exports = {
   MANIFEST_FILENAME,
@@ -25,4 +30,6 @@ module.exports = {
   compareWithManifest,
   buildManifest,
   writeManifest,
+  writeAdoptedManifest,
+  isAdopted,
 };

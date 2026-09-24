@@ -21,6 +21,12 @@ for (let i = 0; i < args.length; i += 1) {
     process.env.CREATE_RN_TEST_PODS = "1";
     continue;
   }
+  // Upgrade builds its "before" snapshot by downloading a published release
+  // from npm and installing it, so that suite is opt-in.
+  if (arg === "--network") {
+    process.env.CREATE_RN_TEST_NETWORK = "1";
+    continue;
+  }
   if (arg === "--scenario") {
     if (args[i + 1]) {
       process.env.CREATE_RN_TEST_SCENARIO = args[i + 1];

@@ -12,4 +12,19 @@ function isInstalled(config) {
   return Boolean(config?.localization?.enabled);
 }
 
-module.exports = { meta, isInstalled, prompt, apply };
+// Mirrors the prompt's defaults: "ru", no remote config, and storage on so the
+// chosen language survives a restart. Remote config would pull in Firebase,
+// which is never something to switch on unattended.
+function enable(config) {
+  return {
+    ...config,
+    localization: {
+      enabled: true,
+      defaultLanguage: "ru",
+      withRemoteConfig: false,
+    },
+    zustandStorage: true,
+  };
+}
+
+module.exports = { meta, isInstalled, prompt, apply, enable };

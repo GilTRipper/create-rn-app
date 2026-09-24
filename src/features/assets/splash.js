@@ -2,6 +2,7 @@ const fs = require("fs-extra");
 const path = require("path");
 const chalk = require("chalk");
 const ora = require("ora");
+const { flavorSourceDirs, flavorResPath } = require("./android-flavors");
 
 function getPngDimensions(buffer) {
   // PNG format: 8-byte signature + IHDR chunk
@@ -338,10 +339,20 @@ async function copySplashScreenImages(
       await updateBootSplashStoryboard(projectPath, projectName);
     }
 
-    // Copy Android images
-    const androidResPath = path.join(projectPath, "android/app/src/main/res");
+    // Copy Android images. The flavours each carry a copy of main/ made before
+    // assets ran, and Gradle merges a flavour over main - so a splash written
+    // only into main never shows up in a dev or staging build.
+    const androidResPaths = [
+      path.join(projectPath, "android/app/src/main/res"),
+      ...(await flavorSourceDirs(projectPath)).map(flavor =>
+        flavorResPath(projectPath, flavor)
+      ),
+    ];
 
-    if (await fs.pathExists(androidResPath)) {
+    for (const androidResPath of androidResPaths) {
+      if (!(await fs.pathExists(androidResPath))) {
+        continue;
+      }
       const densities = [
         { name: "drawable-hdpi", file: androidHdpi },
         { name: "drawable-mdpi", file: androidMdpi },

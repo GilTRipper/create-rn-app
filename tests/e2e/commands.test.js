@@ -75,6 +75,12 @@ describe("CLI subcommands: on a generated project", () => {
     const addable = output.slice(output.indexOf("Can be added"));
     assert.match(addable, /firebase/);
     assert.match(addable, /localization/);
+    // Each addable feature carries a ready-to-paste command for this project.
+    assert.ok(
+      addable.includes(`→ create-rn-app add firebase --path ${projectPath}`),
+      "no add hint for firebase"
+    );
+    assert.ok(!installed.includes("→ create-rn-app add"), "hint on installed");
 
     assert.match(output, /Not available for an existing project/);
     assert.match(output, /environments/);
@@ -126,6 +132,7 @@ describe("CLI subcommands: outside a generated project", () => {
     assert.match(output, /Catalog only/);
     assert.match(output, /firebase/);
     assert.ok(!output.includes("Installed"), "should not claim anything");
+    assert.match(output, /create-rn-app adopt --path/);
   });
 
   it("healthcheck exits 1 and says why", () => {
@@ -133,5 +140,9 @@ describe("CLI subcommands: outside a generated project", () => {
     assert.equal(status, 1);
     assert.match(output, new RegExp(`No ${MANIFEST_FILENAME.replace(".", "\\.")}`));
     assert.match(output, /not created by create-rn-app/);
+    assert.ok(
+      output.includes(`create-rn-app adopt --path ${emptyDir}`),
+      "no adopt hint"
+    );
   });
 });

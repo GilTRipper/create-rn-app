@@ -13,4 +13,10 @@ function isInstalled(config) {
   return Boolean(mode) && mode !== "none";
 }
 
-module.exports = { meta, isInstalled, prompt, apply };
+// Mirrors the prompt's own default variant. The auth flow brings a store and
+// two more navigators with it, so it stays an explicit choice.
+function enable(config) {
+  return { ...config, navigationMode: "app-only" };
+}
+
+module.exports = { meta, isInstalled, prompt, apply, enable };

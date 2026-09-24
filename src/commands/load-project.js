@@ -11,7 +11,17 @@ async function loadProject(options = {}) {
   return { projectPath, manifest };
 }
 
-function reportMissingManifest(projectPath) {
+// A hint is only copy-pasteable if it targets the same project the user
+// pointed this command at.
+function commandHint(command, options = {}) {
+  if (!options.path) {
+    return `create-rn-app ${command}`;
+  }
+  const target = /\s/.test(options.path) ? `"${options.path}"` : options.path;
+  return `create-rn-app ${command} --path ${target}`;
+}
+
+function reportMissingManifest(projectPath, options = {}) {
   console.log(
     chalk.yellow(`\n⚠️  No ${MANIFEST_FILENAME} in ${projectPath}\n`)
   );
@@ -23,6 +33,11 @@ function reportMissingManifest(projectPath) {
   console.log(
     chalk.white("  before the CLI started recording one.\n")
   );
+  console.log(
+    chalk.cyan(
+      `  If it is an existing React Native app, run \`${commandHint("adopt", options)}\` first.\n`
+    )
+  );
 }
 
-module.exports = { loadProject, reportMissingManifest };
+module.exports = { loadProject, reportMissingManifest, commandHint };

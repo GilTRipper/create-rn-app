@@ -30,6 +30,20 @@ async function copyTemplate({ projectPath }) {
           return false;
         }
 
+        // Machine-local files an Android Studio or Xcode run leaves behind in
+        // template/: local.properties pins sdk.dir and .xcode.env.local pins a
+        // node binary, both to whoever ran it last. Neither is tracked in git
+        // or published to npm, so this only bites when generating from a
+        // clone - but a stale absolute path is worse than an absent file.
+        // Android Studio writes local.properties on first open, and
+        // setupXcodeEnvLocal writes .xcode.env.local right after generation.
+        if (
+          normalizedPath.endsWith("local.properties") ||
+          normalizedPath.endsWith(".xcode.env.local")
+        ) {
+          return false;
+        }
+
         const buildDirPattern = /\/build(\/|$)/;
         if (buildDirPattern.test(normalizedPath)) {
           return false;

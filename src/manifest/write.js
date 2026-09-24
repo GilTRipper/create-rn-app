@@ -55,4 +55,34 @@ async function writeManifest(ctx) {
   }
 }
 
-module.exports = { buildManifest, writeManifest };
+// An adopted project deliberately gets no `files` map. There is no honest
+// record of what the CLI originally generated, and recording the current state
+// would make every edit the team has ever made look like untouched template
+// output - which the next upgrade would silently overwrite. `adopted` tells
+// upgrade to rebuild the baseline from a snapshot of the detected version
+// instead, after which the project becomes an ordinary one.
+async function writeAdoptedManifest(projectPath, { cliVersion, reactNative, config }) {
+  const manifest = {
+    manifestVersion: MANIFEST_VERSION,
+    cliVersion,
+    reactNative: reactNative ?? (await readReactNativeVersion(projectPath)),
+    adopted: true,
+    adoptedAt: new Date().toISOString(),
+    adoptedBy: cliPackageJson.version,
+    config,
+  };
+
+  await fs.writeJson(manifestPath(projectPath), manifest, { spaces: 2 });
+  return manifest;
+}
+
+function isAdopted(manifest) {
+  return Boolean(manifest?.adopted);
+}
+
+module.exports = {
+  buildManifest,
+  writeManifest,
+  writeAdoptedManifest,
+  isAdopted,
+};

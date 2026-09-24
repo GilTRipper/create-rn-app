@@ -64,6 +64,27 @@ describe("manifest/hash - shouldHashFile", () => {
     }
   });
 
+  // These are gitignored and machine-specific: an Android SDK path and a node
+  // binary path that postinstall rewrites. Hashing them makes a freshly cloned
+  // project look modified on someone else's machine.
+  it("skips machine-specific files the project gitignores", () => {
+    assert.ok(!shouldHashFile("android/local.properties"));
+    assert.ok(!shouldHashFile("ios/.xcode.env.local"));
+
+    // The committed sibling stays tracked - it is part of the template.
+    assert.ok(shouldHashFile("ios/.xcode.env"));
+    assert.ok(shouldHashFile("android/gradle.properties"));
+  });
+
+  // Firebase config files are the user's credentials, pasted in from the
+  // console. Their paths are deliberately kept out of the manifest, so a
+  // snapshot can never reproduce them - hashing them would make every
+  // comparison claim the template had dropped them.
+  it("skips the user's Firebase credentials", () => {
+    assert.ok(!shouldHashFile("android/app/src/development/google-services.json"));
+    assert.ok(!shouldHashFile("ios/MyApp/GoogleService-Info.plist"));
+  });
+
   it("skips lockfiles, random-id manifests and the manifest itself", () => {
     for (const file of [
       ".create-rn-app.json",

@@ -1,0 +1,200 @@
+{
+  "package": "@giltripper/create-rn-app",
+  "hashLength": 12,
+  "versions": {
+    "1.0.0": {
+      "reactNative": "0.82.1",
+      "react": "19.1.1",
+      "releasedAt": "2025-11-29",
+      "dependencies": "a43232dc0000",
+      "files": {
+        ".eslintrc.json": "8086293ef988",
+        "SETUP.md": "0c1406b8666e",
+        ".gitignore": "1d86f0a9f5f1",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "92e17a1e4317",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": "92e17a1e4317",
+        "android/app/src/main/res/values/colors.xml": "53594adcbfc1",
+        "android/build.gradle": "55243d3cf7c1",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "bf019f44e958",
+        "patches/@gorhom__bottom-sheet@5.2.6.patch": "a4cff7a4d916",
+        "react-native.config.js": "ee2eaa26bcda",
+        "tsconfig.json": "fffdd9a198d8"
+      }
+    },
+    "1.0.1": {
+      "reactNative": "0.82.1",
+      "react": "19.1.1",
+      "releasedAt": "2025-11-30",
+      "dependencies": "a43232dc0000",
+      "files": {
+        ".eslintrc.json": "8086293ef988",
+        "SETUP.md": "0c1406b8666e",
+        ".gitignore": "1d86f0a9f5f1",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "92e17a1e4317",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": "92e17a1e4317",
+        "android/app/src/main/res/values/colors.xml": "53594adcbfc1",
+        "android/build.gradle": "55243d3cf7c1",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "bf019f44e958",
+        "patches/@gorhom__bottom-sheet@5.2.6.patch": "a4cff7a4d916",
+        "react-native.config.js": "ee2eaa26bcda",
+        "tsconfig.json": "fffdd9a198d8"
+      }
+    },
+    "1.0.2": {
+      "reactNative": "0.82.1",
+      "react": "19.1.1",
+      "releasedAt": "2025-12-04",
+      "dependencies": "a40aed419aeb",
+      "files": {
+        ".eslintrc.json": "8086293ef988",
+        "README.md": "aa50df1bbd04",
+        "SETUP.md": "0c1406b8666e",
+        ".gitignore": "1d86f0a9f5f1",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "92e17a1e4317",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": "92e17a1e4317",
+        "android/app/src/main/res/values/colors.xml": "53594adcbfc1",
+        "android/build.gradle": "55243d3cf7c1",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "bf019f44e958",
+        "patches/@gorhom__bottom-sheet@5.2.6.patch": "a4cff7a4d916",
+        "react-native.config.js": "ee2eaa26bcda",
+        "tsconfig.json": "fffdd9a198d8"
+      }
+    },
+    "1.0.3": {
+      "reactNative": "0.82.1",
+      "react": "19.1.1",
+      "releasedAt": "2025-12-08",
+      "dependencies": "1bf5a8cb24cf",
+      "files": {
+        ".eslintrc.json": "8086293ef988",
+        "README.md": "aa50df1bbd04",
+        "SETUP.md": "0c1406b8666e",
+        ".gitignore": "1d86f0a9f5f1",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml": "92e17a1e4317",
+        "android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml": "92e17a1e4317",
+        "android/app/src/main/res/values/colors.xml": "53594adcbfc1",
+        "android/build.gradle": "55243d3cf7c1",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "bf019f44e958",
+        "patches/@gorhom__bottom-sheet@5.2.6.patch": "a4cff7a4d916",
+        "react-native.config.js": "ee2eaa26bcda",
+        "tsconfig.json": "fffdd9a198d8"
+      }
+    },
+    "1.1.0": {
+      "reactNative": "0.82.1",
+      "react": "19.1.1",
+      "releasedAt": "2025-12-19",
+      "dependencies": "88bdd6ea3295",
+      "files": {
+        "README.md": "cc2c651c670b",
+        "SETUP.md": "299bf1d68649",
+        ".gitignore": "39dc2e429dba",
+        "android/app/src/main/res/values/colors.xml": "9d190e06b5e7",
+        "android/build.gradle": "c7e1c60b7209",
+        "eslint.config.js": "1c8778e151f5",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "f2f149cfac78",
+        "react-native.config.js": "bd5ad0e02319",
+        "tsconfig.json": "fffdd9a198d8"
+      }
+    },
+    "1.1.2": {
+      "reactNative": "0.82.1",
+      "react": "19.1.1",
+      "releasedAt": "2025-12-28",
+      "dependencies": "88bdd6ea3295",
+      "files": {
+        "README.md": "cc2c651c670b",
+        "SETUP.md": "299bf1d68649",
+        ".gitignore": "39dc2e429dba",
+        "android/app/src/main/res/values/colors.xml": "9d190e06b5e7",
+        "android/build.gradle": "c7e1c60b7209",
+        "eslint.config.js": "1c8778e151f5",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "f2f149cfac78",
+        "react-native.config.js": "bd5ad0e02319",
+        "tsconfig.json": "fffdd9a198d8"
+      }
+    },
+    "1.1.3": {
+      "reactNative": "0.82.1",
+      "react": "19.1.1",
+      "releasedAt": "2026-01-10",
+      "dependencies": "88bdd6ea3295",
+      "files": {
+        "README.md": "cc2c651c670b",
+        "SETUP.md": "299bf1d68649",
+        ".gitignore": "39dc2e429dba",
+        "android/app/src/main/res/values/colors.xml": "9d190e06b5e7",
+        "android/build.gradle": "c7e1c60b7209",
+        "eslint.config.js": "048b74c9fec2",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "9a3abc2b9a81",
+        "react-native.config.js": "bd5ad0e02319",
+        "tsconfig.json": "fffdd9a198d8"
+      }
+    },
+    "1.1.4": {
+      "reactNative": "0.83.2",
+      "react": "19.2.0",
+      "releasedAt": "2026-05-17",
+      "dependencies": "2426126d60a8",
+      "files": {
+        "README.md": "acf23733fe56",
+        "SETUP.md": "299bf1d68649",
+        ".gitignore": "39dc2e429dba",
+        "android/app/src/main/res/values/colors.xml": "9d190e06b5e7",
+        "android/build.gradle": "c7e1c60b7209",
+        "clean-rebuild.sh": "2159a88b9d04",
+        "eslint.config.js": "048b74c9fec2",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "9a3abc2b9a81",
+        "react-native.config.js": "bd5ad0e02319",
+        "tsconfig.json": "c8bd40a5ff8f"
+      }
+    },
+    "1.1.5": {
+      "reactNative": "0.83.2",
+      "react": "19.2.0",
+      "releasedAt": "2026-05-28",
+      "dependencies": "1ab1bc6e26a6",
+      "files": {
+        "README.md": "acf23733fe56",
+        "SETUP.md": "299bf1d68649",
+        ".gitignore": "39dc2e429dba",
+        "android/app/src/main/res/values/colors.xml": "9d190e06b5e7",
+        "android/build.gradle": "c7e1c60b7209",
+        "clean-rebuild.sh": "2159a88b9d04",
+        "eslint.config.js": "048b74c9fec2",
+        "ios/.xcode.env": "7f359c1c6a67",
+        "ios/{app}/BootSplash.storyboard": "9a3abc2b9a81",
+        "react-native.config.js": "bd5ad0e02319",
+        "tsconfig.json": "c8bd40a5ff8f"
+      }
+    },
+    "1.1.6": {
+      "reactNative": "0.83.2",
+      "react": "19.2.0",
+      "releasedAt": "2026-05-29",
+      "dependencies": "1ab1bc6e26a6",
+      "files": {
+        "README.md": "293a880f46bc",
+        "SETUP.md": "299bf1d68649",
+        ".gitignore": "39dc2e429dba",
+        "android/app/src/main/res/values/colors.xml": "9d190e06b5e7",
+        "android/build.gradle": "c7e1c60b7209",
+        "clean-rebuild.sh": "2159a88b9d04",
+        "eslint.config.js": "048b74c9fec2",
+        "ios/.xcode.env": "0b7818a9a7fe",
+        "ios/{app}/BootSplash.storyboard": "9a3abc2b9a81",
+        "react-native.config.js": "bd5ad0e02319",
+        "scripts/setup-xcode-env.js": "e48842e213cb",
+        "tsconfig.json": "c8bd40a5ff8f"
+      }
+    }
+  }
+}
