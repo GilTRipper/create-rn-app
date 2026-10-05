@@ -5,11 +5,18 @@ const { validateBundleIdentifier } = require("../cli-validate");
 
 const DEFAULT_PROJECT_NAME = "MyApp";
 
+function defaultBundleIdentifier(projectName) {
+  return `com.${projectName.toLowerCase()}`;
+}
+
+// With --yes every project question is skipped and applyAnswers() falls back
+// to the same defaults the prompts would have offered.
 function collectQuestions(ctx) {
   const { projectNameArg, options } = ctx;
   ctx.questions = ctx.questions || [];
+  const ask = !options.yes;
 
-  if (!projectNameArg) {
+  if (!projectNameArg && ask) {
     ctx.questions.push({
       type: "input",
       name: "projectName",
@@ -24,20 +31,18 @@ function collectQuestions(ctx) {
     });
   }
 
-  if (!options.bundleId) {
+  if (!options.bundleId && ask) {
     ctx.questions.push({
       type: "input",
       name: "bundleIdentifier",
       message: "What is your bundle identifier?",
-      default: answers => {
-        const name = projectNameArg || answers.projectName;
-        return `com.${name.toLowerCase()}`;
-      },
+      default: answers =>
+        defaultBundleIdentifier(projectNameArg || answers.projectName),
       validate: input => validateBundleIdentifier(input) || true,
     });
   }
 
-  if (!options.displayName) {
+  if (!options.displayName && ask) {
     ctx.questions.push({
       type: "input",
       name: "displayName",
@@ -46,7 +51,7 @@ function collectQuestions(ctx) {
     });
   }
 
-  if (!options.packageManager) {
+  if (!options.packageManager && ask) {
     ctx.questions.push({
       type: "list",
       name: "packageManager",
@@ -74,9 +79,14 @@ function applyAnswers(ctx, answers) {
   const { projectNameArg, options } = ctx;
   const config = ctx.config;
 
-  config.projectName = projectNameArg || answers.projectName;
-  config.bundleIdentifier = options.bundleId || answers.bundleIdentifier;
-  config.displayName = options.displayName || answers.displayName;
+  config.projectName =
+    projectNameArg || answers.projectName || DEFAULT_PROJECT_NAME;
+  config.bundleIdentifier =
+    options.bundleId ||
+    answers.bundleIdentifier ||
+    defaultBundleIdentifier(config.projectName);
+  config.displayName =
+    options.displayName || answers.displayName || config.projectName;
   config.packageManager =
     options.packageManager || answers.packageManager || "pnpm";
   config.skipInstall =

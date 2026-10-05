@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Mapbox / iOS**: `$RNMapboxMaps.pre_install` is injected before `post_install` on the current RN Podfile (the old regex required an `end` immediately above `post_install` and never matched).
 - **Mapbox / Android**: Mapbox Maven (`api.mapbox.com/downloads/v2/releases/maven`) is appended when the RN 0.86 template has no `allprojects` block.
 - **CLI gates**: Project name (`validate-npm-package-name`) and `--bundle-id` (reverse-DNS `com.company.app`) are checked after prompts and before generation. Passing `--bundle-id INVALID` with `--yes` no longer skipped the interactive validator.
+- **`--yes` still asked project questions**: project name, bundle id, display name and package manager were prompted unless passed as flags, so `create-rn-app MyApp --yes` hung in CI. They now take the prompt defaults (`MyApp`, `com.<name>`, the project name, `pnpm`).
+- **Localization**: the app logged `react-i18next:: useTranslation: You will need to pass in an i18next instance` (`NO_I18NEXT_INSTANCE`) on start and `t` returned keys until a re-render. i18next was initialized in `initLocalization()` after the provider had already called `useTranslation()`. It is now initialized synchronously when `provider.tsx` loads; `initLocalization()` only picks the language. Applies to Remote Config localization as well.
+- `npm test` found no tests (`node --test tests/unit` treated the directory as a file); it now runs `tests/unit/**/*.test.js`.
 
 ### Notes
 - After upgrading an existing generated app: `pnpm install`, then `cd ios && pod install` (or `pnpm run clean:ios` + fresh install).

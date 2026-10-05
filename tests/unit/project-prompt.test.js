@@ -49,6 +49,12 @@ describe("collectQuestions", () => {
     assert.deepEqual(ctx.questions, []);
   });
 
+  it("asks no project questions under --yes even without flags", () => {
+    const ctx = makeCtx({ options: { yes: true } });
+    collectQuestions(ctx);
+    assert.deepEqual(ctx.questions, []);
+  });
+
   it("rejects empty project names and invalid bundle ids", () => {
     const ctx = makeCtx();
     collectQuestions(ctx);
@@ -123,6 +129,21 @@ describe("applyAnswers", () => {
     assert.equal(yesCtx.config.skipInstall, false);
     assert.equal(yesCtx.config.autoYes, true);
     assert.equal(yesCtx.config.packageManager, "pnpm");
+  });
+
+  it("with --yes and no flags derives the prompt defaults", () => {
+    const named = makeCtx({ projectNameArg: "ShopApp", options: { yes: true } });
+    applyAnswers(named, {});
+    assert.equal(named.config.projectName, "ShopApp");
+    assert.equal(named.config.bundleIdentifier, "com.shopapp");
+    assert.equal(named.config.displayName, "ShopApp");
+    assert.equal(named.config.packageManager, "pnpm");
+
+    const unnamed = makeCtx({ options: { yes: true } });
+    applyAnswers(unnamed, {});
+    assert.equal(unnamed.config.projectName, "MyApp");
+    assert.equal(unnamed.config.bundleIdentifier, "com.myapp");
+    assert.equal(unnamed.config.displayName, "MyApp");
   });
 
   it("honors the install confirm when --yes is off", () => {

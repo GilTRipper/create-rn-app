@@ -7,7 +7,7 @@
     "create-rn-app": "./bin/cli.js"
   },
   "scripts": {
-    "test": "node --test tests/unit",
+    "test": "node --test \"tests/unit/**/*.test.js\"",
     "test:e2e": "node tests/run-e2e.js",
     "test:all": "npm test && npm run test:e2e",
     "release:patch": "npm version patch && git push --follow-tags",
