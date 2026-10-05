@@ -7,6 +7,7 @@ const SECTIONS = ["dependencies", "devDependencies"];
 function diffSection(before = {}, after = {}) {
   const added = {};
   const changed = {};
+  const previous = {};
   const removed = [];
 
   for (const [name, version] of Object.entries(after)) {
@@ -14,6 +15,7 @@ function diffSection(before = {}, after = {}) {
       added[name] = version;
     } else if (before[name] !== version) {
       changed[name] = version;
+      previous[name] = before[name];
     }
   }
   for (const name of Object.keys(before)) {
@@ -22,7 +24,7 @@ function diffSection(before = {}, after = {}) {
     }
   }
 
-  return { added, changed, removed };
+  return { added, changed, previous, removed };
 }
 
 function diffDependencies(basePackageJson, theirsPackageJson) {
@@ -58,10 +60,16 @@ function planDependencyChanges(projectPackageJson, diff) {
     }
 
     for (const [name, version] of Object.entries(sectionDiff.changed)) {
-      if (current[name] === version) {
+      // Gone from the project: the team dropped it, and bringing it back
+      // would undo their decision.
+      if (!(name in current) || current[name] === version) {
         continue;
       }
-      sectionApply[name] = version;
+      if (current[name] === sectionDiff.previous[name]) {
+        sectionApply[name] = version;
+      } else {
+        conflicts.push({ section, name, project: current[name], wanted: version });
+      }
     }
 
     // A dependency the feature stopped needing stays put: the team may well be

@@ -19,6 +19,7 @@ describe("add/deps - diffing two snapshots", () => {
 
     assert.deepEqual(diff.dependencies.added, { zustand: "^5.0.8" });
     assert.deepEqual(diff.dependencies.changed, { axios: "^1.1.0" });
+    assert.deepEqual(diff.dependencies.previous, { axios: "^1.0.0" });
     assert.deepEqual(diff.dependencies.removed, []);
   });
 
@@ -51,6 +52,40 @@ describe("add/deps - planning against a real project", () => {
     assert.deepEqual(plan.conflicts, [
       { section: "dependencies", name: "zustand", project: "^4.0.0", wanted: "^5.0.8" },
     ]);
+  });
+
+  it("moves a version the team never touched along with the template", () => {
+    const plan = planDependencyChanges(
+      pkg({ axios: "^1.0.0" }),
+      diffDependencies(pkg({ axios: "^1.0.0" }), pkg({ axios: "^1.1.0" }))
+    );
+
+    assert.deepEqual(plan.apply.dependencies, { axios: "^1.1.0" });
+    assert.deepEqual(plan.conflicts, []);
+  });
+
+  // The upgrade path: the template bumped a library the team had already
+  // pinned to something else. Their pin wins.
+  it("keeps a team pin when the template bumps the same library", () => {
+    const plan = planDependencyChanges(
+      pkg({ axios: "1.0.5" }),
+      diffDependencies(pkg({ axios: "^1.0.0" }), pkg({ axios: "^1.1.0" }))
+    );
+
+    assert.equal(plan.apply.dependencies, undefined);
+    assert.deepEqual(plan.conflicts, [
+      { section: "dependencies", name: "axios", project: "1.0.5", wanted: "^1.1.0" },
+    ]);
+  });
+
+  it("does not bring back a library the team removed", () => {
+    const plan = planDependencyChanges(
+      pkg({}),
+      diffDependencies(pkg({ axios: "^1.0.0" }), pkg({ axios: "^1.1.0" }))
+    );
+
+    assert.equal(plan.apply.dependencies, undefined);
+    assert.deepEqual(plan.conflicts, []);
   });
 
   it("says nothing when the project already has the exact version", () => {

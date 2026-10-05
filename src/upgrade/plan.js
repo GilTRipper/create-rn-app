@@ -4,7 +4,11 @@ const { buildSnapshot } = require("../snapshot");
 const { hashProjectFiles } = require("../manifest/hash");
 const { classifyAll, ACTIONS } = require("../merge/classify");
 const { mergeThreeWay } = require("../merge/three-way");
-const { diffDependencies, planDependencyChanges } = require("../add/deps");
+const {
+  planPackageJson,
+  emptyPackageJsonPlan,
+  patchFiles,
+} = require("./package-json");
 const { loadCreateApp } = require("./old-version");
 
 const PACKAGE_JSON = "package.json";
@@ -31,10 +35,13 @@ const NEEDS_BASE = new Set([ACTIONS.MERGE]);
 // rather than the limitation it is. The Xcode section reports them instead.
 const XCODE_GENERATED = /\.(pbxproj|xcscheme)$/;
 
-function actionable(classified) {
+// Patch files travel with the package they patch, so they are decided in the
+// package.json lane together with the version, never on their own.
+function actionable(classified, packageLaneFiles) {
   return Object.entries(classified).filter(
     ([filePath, result]) =>
       filePath !== PACKAGE_JSON &&
+      !packageLaneFiles.has(filePath) &&
       !XCODE_GENERATED.test(filePath) &&
       result.action !== ACTIONS.SKIP_UNCHANGED &&
       result.action !== ACTIONS.SKIP_GONE
@@ -101,6 +108,22 @@ async function planFile(filePath, result, { projectPath, base, theirs, labels })
   }
 }
 
+async function readOrNull(read, filePath) {
+  try {
+    return await read(filePath);
+  } catch {
+    return null;
+  }
+}
+
+async function readPatchContents(packageJson, read) {
+  const contents = {};
+  for (const file of patchFiles(packageJson)) {
+    contents[file] = await readOrNull(read, file);
+  }
+  return contents;
+}
+
 async function buildUpgradePlan({ projectPath, manifest, onDownload }) {
   const config = manifest.config;
   const theirs = await buildSnapshot(config, { label: "upgrade-new" });
@@ -125,14 +148,35 @@ async function buildUpgradePlan({ projectPath, manifest, onDownload }) {
 
     const baseline = adopted ? base.files : manifest.files;
     const classified = classifyAll({ baseline, current, theirs: theirs.files });
-    const work = actionable(classified);
+
+    // package.json is always edited by the team, so the only question worth
+    // asking is whether the template changed its own output - the recorded
+    // hash answers that. Patches are content outside package.json, so a patch
+    // rewritten under the same name counts too.
+    const theirsPackageJson = await theirs.readJson(PACKAGE_JSON);
+    const packageLaneNeeded =
+      adopted ||
+      [PACKAGE_JSON, ...patchFiles(theirsPackageJson)].some(
+        filePath => baseline[filePath] !== theirs.files[filePath]
+      );
 
     // Otherwise the old snapshot is the expensive half - a download and an
-    // install - and it is only ever needed as the common ancestor of a
-    // three-way merge. A project nobody has edited never needs it at all.
-    if (!base && work.some(([, result]) => NEEDS_BASE.has(result.action))) {
+    // install - and it is only ever needed as the common ancestor: of a
+    // three-way merge, or of package.json. A project nobody has edited, on a
+    // template that left package.json alone, never needs it at all.
+    const needsBaseForFiles = actionable(classified, new Set()).some(([, result]) =>
+      NEEDS_BASE.has(result.action)
+    );
+    if (!base && (packageLaneNeeded || needsBaseForFiles)) {
       base = await buildBase();
     }
+
+    const basePackageJson = base ? await base.readJson(PACKAGE_JSON) : null;
+    const packageLaneFiles = new Set([
+      ...patchFiles(theirsPackageJson),
+      ...patchFiles(basePackageJson),
+    ]);
+    const work = actionable(classified, packageLaneFiles);
 
     const labels = {
       ours: "your version",
@@ -153,17 +197,28 @@ async function buildUpgradePlan({ projectPath, manifest, onDownload }) {
       }
     }
 
-    // Dependencies come from whatever the two templates shipped, so the old
-    // package.json is only available when the base snapshot was built. Without
-    // it the project's own file stands in, which is exactly right when nobody
-    // has edited it.
-    const before = base
-      ? await base.readJson(PACKAGE_JSON)
-      : await fs.readJson(path.join(projectPath, PACKAGE_JSON));
-    const dependencies = planDependencyChanges(
-      await fs.readJson(path.join(projectPath, PACKAGE_JSON)),
-      diffDependencies(before, await theirs.readJson(PACKAGE_JSON))
-    );
+    // Never the project's own package.json standing in for the old template:
+    // every dependency the team added would then read as "the template
+    // dropped it".
+    let dependencies = emptyPackageJsonPlan();
+    if (packageLaneNeeded) {
+      const projectPackageJson = await fs.readJson(path.join(projectPath, PACKAGE_JSON));
+      const theirsPatches = await readPatchContents(theirsPackageJson, theirs.read);
+      dependencies = planPackageJson({
+        base: basePackageJson,
+        theirs: theirsPackageJson,
+        project: projectPackageJson,
+        contents: {
+          base: await readPatchContents(basePackageJson, base.read),
+          theirs: theirsPatches,
+          project: await readPatchContents(projectPackageJson, filePath =>
+            fs.readFile(path.join(projectPath, filePath), "utf8")
+          ),
+        },
+      });
+      // Written into the project when a patch is accepted.
+      dependencies.patchContents = theirsPatches;
+    }
 
     const xcode = [
       ...new Set([
@@ -180,7 +235,7 @@ async function buildUpgradePlan({ projectPath, manifest, onDownload }) {
       xcode,
       usedBaseSnapshot: Boolean(base),
       baselineUpdates: { ...theirs.files },
-      reactNative: (await theirs.readJson(PACKAGE_JSON)).dependencies?.[
+      reactNative: theirsPackageJson.dependencies?.[
         "react-native"
       ],
     };

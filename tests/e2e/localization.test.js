@@ -25,6 +25,14 @@ function productionFirebase(configDir) {
   };
 }
 
+function assertInitBeforeProvider(provider) {
+  const init = provider.indexOf(".use(initReactI18next)");
+  assert.ok(init !== -1, "i18next must be initialized with initReactI18next");
+  assert.equal(provider.indexOf(".use(initReactI18next)", init + 1), -1, "initialized once");
+  assert.ok(init < provider.indexOf("export const LocalizationProvider"), "init at module level");
+  assert.ok(provider.includes("initAsync: false"));
+}
+
 describe("localization with Zustand", () => {
   let projectPath;
 
@@ -49,6 +57,11 @@ describe("localization with Zustand", () => {
     for (const dep of ["i18next", "i18next-icu", "react-i18next"]) {
       assert.ok(deps[dep], `missing ${dep}`);
     }
+
+    // useTranslation() throws NO_I18NEXT_INSTANCE unless i18next is bound to
+    // react-i18next before the provider first renders.
+    const provider = readText(projectPath, localizationDir, "provider.tsx");
+    assertInitBeforeProvider(provider);
 
     const app = readText(projectPath, "App.tsx");
     assert.ok(app.includes("LocalizationProvider"));
@@ -75,6 +88,8 @@ describe("localization without Zustand", () => {
     assert.ok(!provider.includes("useLocalizationStore"));
     assert.ok(provider.includes("useState"));
     assert.ok(provider.includes("./languages/ar.json"));
+    assertInitBeforeProvider(provider);
+    assert.ok(provider.includes('fallbackLng: "ar"'));
 
     const store = readText(projectPath, "src/lib/localization/store/index.ts");
     assert.match(store.trim(), /export\s*\{\s*\};?/);
@@ -114,6 +129,7 @@ describe("localization with Remote Config", () => {
     assert.ok(provider.includes("addResourceBundle"));
     assert.ok(!provider.includes("deepMerge"), "unused merge helper must not be emitted");
     assert.ok(provider.includes("fallbackLng: false"));
+    assertInitBeforeProvider(provider);
     assert.ok(provider.includes("i18n.options.fallbackLng = false"));
     assert.ok(provider.includes("using local file as fallback"));
 

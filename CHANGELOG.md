@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-09-25
 
 ### Added
 - **Project manifest** `.create-rn-app.json`: generated projects record the CLI version, React Native version, the chosen configuration and hashes of the template output. Commit it — the commands below rely on it. Secrets (API keys, tokens, Google config paths) are never written to it.
@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`create-rn-app healthcheck`**: shows versions, installed features and which template files were changed, deleted or added by the team.
 - **`create-rn-app adopt`**: writes a manifest for a project created before manifests existed. Detects the CLI version and configuration from the project, asks when it cannot tell (`--from <version>` to say it yourself), `--force` to redo it.
 - **`create-rn-app add <feature>`**: adds `storage`, `theme`, `navigation`, `localization`, `maps`, `firebase` or `assets` to an existing project. Only the feature's own changes are applied; files the team edited are merged 3-way, and real conflicts are asked about (or left as conflict markers with `-y`). `assets` takes `--fonts-dir`, `--splash-dir`, `--app-icon-dir`. `--dry-run` shows the plan.
-- **`create-rn-app upgrade`**: moves a project to the current template. Untouched files are updated, edited files are merged 3-way against the template the project was created from, the team's own files are left alone, and removed template files are reported, never deleted. Dependencies are merged per package; versions the team pinned are kept. `--dry-run` shows the plan.
+- **`create-rn-app upgrade`**: moves a project to the current template. Untouched files are updated, edited files are merged 3-way against the template the project was created from, the team's own files are left alone, and removed template files are reported, never deleted. `package.json` is merged entry by entry: dependencies (versions the team pinned are kept, packages moved between sections move), `scripts` and `engines` (keys the team changed are kept), and pnpm patches, which move together with their package version. Packages the template dropped are offered for removal one by one (kept with `-y`). `--dry-run` shows the plan.
 - `add`, `adopt` and `upgrade` need a git repository with a clean working tree, so every change can be undone with `git checkout -- . && git clean -fd`.
 - **App icons per environment**: the icon directory can hold one subfolder per environment (`development/`, `staging/`, …) next to a shared set; an environment without its own folder gets the shared icons.
 - Optional **UI kit** from `ui-templates/`. Interactive prompt copies `All` or selected components into `src/ui/components/` and injects only their npm dependencies. Current components: **TurboImage** (`react-native-turbo-image`) and **LiquidGlassView** / **AnimatedLiquidGlassView** (`@callstack/liquid-glass`, Xcode 26+ for the iOS glass effect).
@@ -53,7 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Projects created before this version have no manifest: run `create-rn-app adopt` once before `add` or `upgrade`.
 - **Known limitations of `upgrade`**:
   - Xcode project files (`project.pbxproj`, `.xcscheme`) are not changed. When the template changed them, `upgrade` lists them so you can compare by hand.
-  - Patches in `patches/` pinned through `pnpm.patchedDependencies` are not replaced when the patched package is bumped.
 - `environments` cannot be added to an existing project: it creates targets inside the Xcode project.
 - Splash screens stay shared across environments.
 

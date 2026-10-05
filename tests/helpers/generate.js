@@ -121,12 +121,16 @@ async function generateProject(name, overrides = {}, options = {}) {
 
   track(projectPath);
 
+  // `generate` swaps in another version's createApp, to build a project the way
+  // an older release really did.
+  const generate = options.generate || createApp;
+
   if (!options.capture) {
-    await createApp(config);
+    await generate(config);
     return { projectName, projectPath, config, output: null };
   }
 
-  const { output } = await captureOutput(() => createApp(config));
+  const { output } = await captureOutput(() => generate(config));
   return { projectName, projectPath, config, output };
 }
 

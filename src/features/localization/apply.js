@@ -172,13 +172,7 @@ async function configureLocalization(
       setLanguage(lng);
     }
 
-    await i18n.use(initReactI18next).use(ICU).init({
-      // add all languages your app supports (from languages folder)
-      resources: { ${JSON.stringify(lang)}: { translation: translations } },
-      lng,
-      fallbackLng: ${JSON.stringify(lang)},
-      interpolation: { escapeValue: false },
-    });`;
+    await i18n.changeLanguage(lng);`;
 
   const storeImport = useZustand
     ? `import { useLocalizationStore } from "./store";`
@@ -202,22 +196,41 @@ async function configureLocalization(
     ? `  const [isInitialized, setIsInitialized] = React.useState(false);`
     : "";
 
+  // i18next must be registered with react-i18next before the first
+  // useTranslation() call, so it is initialized at module load (synchronously),
+  // not in initLocalization() which only runs after the first render.
+  const i18nSetup = withRemoteConfig
+    ? `// Initialize i18n without resources - they will be loaded from Remote Config
+if (!i18n.isInitialized) {
+  i18n
+    .use(initReactI18next)
+    .use(ICU)
+    .init({
+      resources: {},
+      lng: ${JSON.stringify(lang)},
+      fallbackLng: false, // No fallback - use only Remote Config
+      interpolation: { escapeValue: false },
+      initAsync: false,
+    });
+}`
+    : `// Initialized before any component renders: useTranslation() needs the instance
+if (!i18n.isInitialized) {
+  i18n
+    .use(initReactI18next)
+    .use(ICU)
+    .init({
+      // add all languages your app supports (from languages folder)
+      resources: { ${JSON.stringify(lang)}: { translation: translations } },
+      lng: ${JSON.stringify(lang)},
+      fallbackLng: ${JSON.stringify(lang)},
+      interpolation: { escapeValue: false },
+      initAsync: false,
+    });
+}`;
+
   const i18nInit = withRemoteConfig
     ? `${stateHook}
 ${isInitializedState}
-
-  // Initialize i18n without resources - they will be loaded from Remote Config
-  if (!i18n.isInitialized) {
-    i18n
-      .use(initReactI18next)
-      .use(ICU)
-      .init({
-        resources: {},
-        lng: ${JSON.stringify(lang)},
-        fallbackLng: false, // No fallback - use only Remote Config
-        interpolation: { escapeValue: false },
-      });
-  }
 
   const { t: rawT, i18n: i18nInstance } = useTranslation();`
     : `  const { t: rawT, i18n: i18nInstance } = useTranslation();
@@ -239,7 +252,9 @@ ${storeImport}
 ${remoteConfigImport}import type { I18nContextProps, LocalizationContextProps, TranslationComponents } from "./types";
 import type { ReactNode } from "react";
 
-const LocalizationContext = createContext<LocalizationContextProps | undefined>(undefined);
+${i18nSetup}
+
+const LocalizationContext =createContext<LocalizationContextProps | undefined>(undefined);
 
 const parseWithComponents = (str: string, components: TranslationComponents): ReactNode => {
   const regex = /<(\\w+)>(.*?)<\\/\\1>/gs;

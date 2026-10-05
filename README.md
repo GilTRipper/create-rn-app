@@ -523,11 +523,16 @@ For each template file:
 - you own it (not from the template) → left alone
 - the template removed it → reported, never deleted
 
-Dependencies in `package.json` are merged per package; versions you pinned yourself are kept. To merge edited files, `upgrade` downloads the CLI version that created the project from npm (cached afterwards), so it needs network access — always for an adopted project, otherwise only when there is something to merge.
+`package.json` is merged entry by entry, never as text — only where the template changed something:
+- **dependencies**: a version you never touched follows the template; a version you pinned yourself is kept. A package the template moved between `dependencies` and `devDependencies` moves too
+- **packages the template dropped**: you are asked about each one (default: remove). With `-y` they are kept, since your own code may still import them
+- **`scripts` and `engines`**: new keys are added, keys you never edited follow the template, keys you changed are kept and reported. Your own scripts are never touched
+- **patches** (`pnpm.patchedDependencies` + `patches/*.patch`): a patch moves together with its package version. An untouched patch is replaced or removed along with the bump. If you edited it, you are asked: yes replaces it (your version stays in git), no keeps both the patch and the package at the current version. With `-y` it is replaced. Your own patches are never touched
+
+To merge edited files, `upgrade` downloads the CLI version that created the project from npm (cached afterwards), so it needs network access — always for an adopted project, otherwise only when there is something to merge.
 
 **Not updated automatically:**
 - Xcode project files (`project.pbxproj`, `.xcscheme`) contain ids unique to your project. When the template changed them, `upgrade` lists them — compare by hand.
-- Patches in `patches/` pinned via `pnpm.patchedDependencies` are not replaced when the patched package is bumped.
 
 After `add` or `upgrade`, install dependencies and pods as usual.
 

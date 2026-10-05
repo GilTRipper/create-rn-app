@@ -2,8 +2,11 @@ const fs = require("fs-extra");
 const path = require("path");
 const chalk = require("chalk");
 const inquirer = require("inquirer");
-const { buildUpgradePlan, OUTCOMES, PACKAGE_JSON } = require("../upgrade/plan");
-const { applyDependencyChanges } = require("../add/deps");
+const { buildUpgradePlan, OUTCOMES } = require("../upgrade/plan");
+const {
+  printPackageJsonPlan,
+  applyPackageJsonLane,
+} = require("../upgrade/package-json-apply");
 const { manifestPath, isAdopted } = require("../manifest");
 const { compareVersions } = require("../shared/version");
 const { workingTreeStatus } = require("../shared/git");
@@ -25,7 +28,7 @@ const STYLE = {
 const ASKS = new Set([OUTCOMES.CONFLICT, OUTCOMES.RESTORE, OUTCOMES.COLLISION]);
 const WRITES_SILENTLY = new Set([OUTCOMES.CREATE, OUTCOMES.OVERWRITE, OUTCOMES.MERGED]);
 
-function printPlan(plan, manifest) {
+function printPlan(plan, manifest, options) {
   console.log(chalk.bold.cyan("\n  Versions"));
   console.log(
     `    ${chalk.gray("create-rn-app".padEnd(16))}${manifest.cliVersion} → ${chalk.bold(
@@ -67,27 +70,7 @@ function printPlan(plan, manifest) {
     }
   }
 
-  const additions = Object.entries(plan.dependencies.apply).flatMap(
-    ([, entries]) => Object.entries(entries).map(([name, v]) => `${name}@${v}`)
-  );
-  if (additions.length || plan.dependencies.conflicts.length || plan.dependencies.removals.length) {
-    console.log(chalk.bold.cyan("\n  Dependencies"));
-    additions.forEach(entry => console.log(`    ${chalk.green("↑")} ${entry}`));
-    plan.dependencies.conflicts.forEach(conflict =>
-      console.log(
-        `    ${chalk.yellow("!")} ${conflict.name} ${chalk.dim(
-          `you pinned ${conflict.project}, the template moved to ${conflict.wanted} - keeping yours`
-        )}`
-      )
-    );
-    plan.dependencies.removals.forEach(removal =>
-      console.log(
-        `    ${chalk.gray("·")} ${removal.name} ${chalk.dim(
-          "template dropped it - left in place, you may be using it"
-        )}`
-      )
-    );
-  }
+  printPackageJsonPlan(plan.dependencies, options);
 
   if (plan.xcode.length > 0) {
     console.log(chalk.bold.cyan("\n  Xcode"));
@@ -253,7 +236,7 @@ async function upgradeCommand(options = {}) {
         ),
     });
 
-    printPlan(plan, manifest);
+    printPlan(plan, manifest, options);
 
     if (options.dryRun) {
       console.log(chalk.gray("\n  --dry-run: nothing was written.\n"));
@@ -262,21 +245,7 @@ async function upgradeCommand(options = {}) {
 
     const { written, leftovers, skipped } = await applyPlan(plan, projectPath, options);
 
-    const dependencyCount = Object.values(plan.dependencies.apply).reduce(
-      (total, entries) => total + Object.keys(entries).length,
-      0
-    );
-    if (dependencyCount > 0) {
-      const packageJsonPath = path.join(projectPath, PACKAGE_JSON);
-      await fs.writeJson(
-        packageJsonPath,
-        applyDependencyChanges(
-          await fs.readJson(packageJsonPath),
-          plan.dependencies.apply
-        ),
-        { spaces: 2 }
-      );
-    }
+    const packageJson = await applyPackageJsonLane(plan.dependencies, projectPath, options);
 
     await updateManifest(projectPath, manifest, plan);
 
@@ -289,6 +258,7 @@ async function upgradeCommand(options = {}) {
       console.log(chalk.yellow(`  Kept yours; the template's is at ${file}`))
     );
     skipped.forEach(file => console.log(chalk.gray(`  Left alone: ${file}`)));
+    packageJson.notes.forEach(note => console.log(chalk.yellow(`  ${note}`)));
     console.log(chalk.cyan(`\n  Next: ${manifest.config.packageManager} install`));
     if (process.platform === "darwin") {
       console.log(chalk.cyan("        cd ios && pod install"));
