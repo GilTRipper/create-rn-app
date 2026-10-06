@@ -1,8 +1,8 @@
 name: Publish Packages
 
+# One trigger per release: the tag push. A GitHub Release is created by
+# release.yml from the same tag, so listening to `release` too would publish twice.
 on:
-  release:
-    types: [published]
   push:
     tags:
       - "v*"
@@ -27,33 +27,32 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write # npm trusted publishing (OIDC), no NPM_TOKEN
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || github.ref || inputs.tag }}
+          # On workflow_dispatch github.ref is the branch it was run from,
+          # so the requested tag has to win.
+          ref: ${{ inputs.tag || github.ref }}
 
+      # Node 24 ships npm >= 11.5.1, the minimum for trusted publishing.
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
 
       - name: Verify package.json version matches tag
+        env:
+          TAG_NAME: ${{ inputs.tag || github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG_VERSION="${{ github.event.release.tag_name }}"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            TAG_VERSION=${GITHUB_REF#refs/tags/}
-          else
-            TAG_VERSION="${{ inputs.tag }}"
-          fi
-          EXPECTED_VERSION=${TAG_VERSION#v}
+          EXPECTED_VERSION=${TAG_NAME#v}
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           if [ "$EXPECTED_VERSION" != "$PACKAGE_VERSION" ]; then
             echo "❌ Version mismatch: tag is $EXPECTED_VERSION but package.json is $PACKAGE_VERSION"
@@ -63,8 +62,6 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish_github_packages:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.publish_target == 'both' || inputs.publish_target == 'github' }}
@@ -75,30 +72,26 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name || github.ref || inputs.tag }}
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Node.js for GitHub Packages
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           registry-url: "https://npm.pkg.github.com"
           scope: "@giltripper"
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
 
       - name: Verify package.json version matches tag
+        env:
+          TAG_NAME: ${{ inputs.tag || github.ref_name }}
         run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG_VERSION="${{ github.event.release.tag_name }}"
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            TAG_VERSION=${GITHUB_REF#refs/tags/}
-          else
-            TAG_VERSION="${{ inputs.tag }}"
-          fi
-          EXPECTED_VERSION=${TAG_VERSION#v}
+          EXPECTED_VERSION=${TAG_NAME#v}
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           if [ "$EXPECTED_VERSION" != "$PACKAGE_VERSION" ]; then
             echo "❌ Version mismatch: tag is $EXPECTED_VERSION but package.json is $PACKAGE_VERSION"
